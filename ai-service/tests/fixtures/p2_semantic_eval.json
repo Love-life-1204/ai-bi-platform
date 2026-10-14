@@ -1,0 +1,60 @@
+{
+  "catalog": {
+    "datasets": [
+      {
+        "dataset_id": 10,
+        "dataset_version_id": 11,
+        "code": "orders",
+        "name": "订单",
+        "fields": []
+      }
+    ],
+    "metrics": [
+      {
+        "metric_version_id": 101,
+        "metric_id": 1,
+        "dataset_version_id": 11,
+        "code": "net_sales",
+        "name": "净销售额",
+        "unit": "CNY",
+        "aliases": ["销售收入", "营收"],
+        "allowed_dimension_field_ids": []
+      },
+      {
+        "metric_version_id": 102,
+        "metric_id": 2,
+        "dataset_version_id": 11,
+        "code": "order_count",
+        "name": "订单量",
+        "unit": "笔",
+        "aliases": ["订单数"],
+        "allowed_dimension_field_ids": []
+      },
+      {
+        "metric_version_id": 103,
+        "metric_id": 3,
+        "dataset_version_id": 11,
+        "code": "refund_rate",
+        "name": "退款率",
+        "unit": "%",
+        "aliases": ["退货率"],
+        "allowed_dimension_field_ids": []
+      }
+    ],
+    "terms": [],
+    "semantic_version": "eval-v1"
+  },
+  "cases": [
+    {"question": "最近净销售额趋势", "expected_metric_version_ids": [101], "expected_shape": "TREND"},
+    {"question": "营收未来一个月会怎样", "expected_metric_version_ids": [101], "expected_shape": "FORECAST"},
+    {"question": "订单数是否有突增异常", "expected_metric_version_ids": [102], "expected_shape": "ANOMALY"},
+    {"question": "比较净销售额和订单量", "expected_metric_version_ids": [101, 102], "expected_shape": "COMPARE"},
+    {"question": "退款率与净销售额有什么关系", "expected_metric_version_ids": [103, 101], "expected_shape": "CORRELATE"}
+  ],
+  "thresholds": {
+    "hit_at_3": 1.0,
+    "mean_reciprocal_rank": 0.9,
+    "intent_accuracy": 1.0,
+    "complex_exact_match": 1.0
+  }
+}

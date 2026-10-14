@@ -68,9 +68,19 @@ class ClickHouseTests(unittest.TestCase):
         clickhouse(f'DROP DATABASE {cls.database} SYNC')
 
     def revenue(self, seq=1, generation=1, tenant=1, regions="['EAST']"):
-        return clickhouse(self.sql+' FORMAT JSONEachRow', {'param_tenant_id':tenant,'param_dataset_id':10,'param_generation_id':generation,'param_committed_seq':seq,'param_allowed_regions':regions,'param_start_at':'2026-10-01 00:00:00','param_end_at':'2026-11-01 00:00:00'})
+        return clickhouse(self.sql+' FORMAT JSONEachRow', {
+            'param_tenant_id':tenant,
+            'param_dataset_id':10,
+            'param_generation_id':generation,
+            'param_committed_seq':seq,
+            'param_allowed_regions':regions,
+            'param_start_at':'2026-10-01 00:00:00',
+            'param_end_at':'2026-11-01 00:00:00',
+            # ClickHouse 26.9 默认会把 Int64 输出为 JSON number；显式保留字符串，避免前端精度损失。
+            'output_format_json_quote_64bit_integers':'1',
+        })
 
-    def test_refund_cancel_replay_and_unpublished(self):
+    def test_replay_and_failed_unpublished_batch_are_not_counted(self):
         self.assertEqual(json.loads(self.revenue())['net_sales_minor_units'], '25000')
 
     def test_rls_after_latest_version(self):

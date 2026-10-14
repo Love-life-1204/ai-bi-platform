@@ -1,0 +1,2051 @@
+{
+  "title": "AI BI 平台缺陷修复任务清单与实施计划",
+  "planning_date": "2026-10-14",
+  "timezone": "Asia/Shanghai",
+  "scope": "autonomous_repair",
+  "root": "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform",
+  "baseline_commit": "05ae2637a39f570bd685ab410b0eeacc70416c98",
+  "code_state": "existing_uncommitted_changes",
+  "defect_counts": {
+    "total": 10,
+    "completed": 4,
+    "open": 6,
+    "open_critical": 2,
+    "open_high": 4
+  },
+  "core_effort_person_days": [
+    36,
+    60
+  ],
+  "tasks": [
+    {
+      "id": "FIX-D05-01",
+      "title": "建立身份、租户及动作鉴权入口",
+      "defect": "D05",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/PermissionContextService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/security/TenantContextInterceptor.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/config/ApiRoutingConfiguration.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/AccessDecisionService.java"
+      ],
+      "problem": "缺少租户头可避开统一上下文拦截；tenantId 路径参数并不证明调用人有权。",
+      "target": "公开端点使用明确白名单；受保护服务在任何入口均验证会话、成员、目标租户及动作。",
+      "steps": [
+        "列出实际 /api 与 /api/v1 别名及内部入口，映射 global、tenant、platform 身份类型",
+        "提取无循环依赖的统一鉴权组件，绑定服务层调用人而非信任请求 DTO",
+        "定义 401/403/404、owner 与 tenant:manage/member:manage 规则并更新契约"
+      ],
+      "solution": "拦截器只做统一预检，关键服务必须调用 requireContext/动作决策；路径、头与令牌租户必须一致。owner 管理能力来自数据库有效成员，不接受客户端 owner/role。新建企业仅需有效全局会话，不能要求尚不存在的租户令牌。",
+      "deps": [],
+      "risk": "认证规则变更先部署兼容客户端与隔离夹具；保存权限配置快照。回滚保留默认拒绝，不能退回匿名白名单；新增组件避免与 AccessDecisionService/WorkspaceService 相互注入。",
+      "tests": "单元：缺头、伪造头、无效/过期/撤销 token；接口：路径与令牌不一致、两套路径别名、服务层直调。",
+      "accept": "所有受保护入口都进入统一鉴权；匿名 401、越权 403 或约定隐藏对象的 404；拒绝请求零业务写入。",
+      "effort": [
+        1,
+        1.5
+      ],
+      "phase": 1,
+      "status": "已修复待验证",
+      "priority": "P0",
+      "severity": "Critical",
+      "module": "Spring Boot / Vue3 / MySQL",
+      "root_cause": "TenantController 的创建、读取、修改及冻结入口未接收认证信息；TenantContextInterceptor 在缺少 X-Tenant-Id 时直接放行。TenantServiceImpl.createTenant 只写租户，未绑定首任所有者；冻结未递增权限版本。",
+      "existing_evidence": "缺陷清单；evidence/live-api-results.json 的 4 条租户读写安全失败；TenantController、TenantServiceImpl、PermissionContextService。",
+      "assignee": "Codex",
+      "commit": null,
+      "started_at": "2026-10-14",
+      "completed_at": null,
+      "new_evidence": [
+        "testing/reports/evidence/autonomous-20261014/d07-import-revocation-module.json",
+        "testing/reports/evidence/autonomous-20261014/p0-boundary-green.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-final.json",
+        "testing/reports/evidence/autonomous-20261014/p0-jdbc-idempotency-audit.json",
+        "testing/reports/evidence/autonomous-20261014/p0-module-regression-3.json",
+        "testing/reports/evidence/autonomous-20261014/p0-security-red-cache.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-after-d07.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-after-d09.json",
+        "testing/reports/evidence/autonomous-20261014/p0-security-change-audit-green.json",
+        "testing/reports/evidence/autonomous-20261014/d09-server-module-final.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-playwright.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-id-evidence.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-environment.json"
+      ],
+      "remaining": "角色/ACL/策略/工作空间/部门变更审计已补齐，当前P0真实HTTP30项及最新后端模块回归通过；仍需审计故障事务回滚、完整角色/并发边界及最终联合验收，根因未关闭。"
+    },
+    {
+      "id": "FIX-D05-02",
+      "title": "原子创建企业并绑定首任所有者",
+      "defect": "D05",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/controller/TenantController.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/service/TenantService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/service/impl/TenantServiceImpl.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/MembershipService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/mapper/MemberMapper.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/mapper/JdbcMemberMapper.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/sql/mysql.sql"
+      ],
+      "problem": "创建租户只插入租户记录；现有测试依靠另一个匿名接口补成员，无法建立可靠 owner 链。",
+      "target": "已登录用户入驻时，在同一事务内生成租户和首任 active owner；失败无半成品。",
+      "steps": [
+        "由服务端会话获取 userId，忽略或拒绝外部所有者字段",
+        "增加入驻编排及事务内成员插入，初始化最小管理权限；已有角色字典由迁移同步准备",
+        "增加幂等键/重复 tenant_code 与失败重试处理；替换匿名测试夹具",
+        "审计存量零所有者/异常所有者租户，输出逐租户修复清单"
+      ],
+      "solution": "复用 sys_tenant_member.is_owner 及 tenant/user 唯一约束；tenant、owner、必要管理绑定同一 MySQL 事务。存量归属必须用可信业务记录确认，不自动把第一个成员设为 owner；未知归属关闭管理写入并列待核实。",
+      "deps": [
+        "FIX-D05-01"
+      ],
+      "risk": "实施前备份 tenant/member/角色绑定及关系；不删除已有租户。失败回滚事务；成功后的错误归属通过审计修正与权限版本递增处理。新建默认工作空间若非必要不扩大本任务。",
+      "tests": "真实 MySQL 事务失败注入、重复/并发入驻、用户停用、匿名创建、存量归属审计。",
+      "accept": "并发同幂等键只产生一个租户和一个首任 owner；插入成员失败时新增租户数=0；无匿名创建；所有存量异常归属有处理或阻断记录。",
+      "effort": [
+        1.5,
+        2.5
+      ],
+      "phase": 1,
+      "status": "已修复待验证",
+      "priority": "P0",
+      "severity": "Critical",
+      "module": "Spring Boot / Vue3 / MySQL",
+      "root_cause": "TenantController 的创建、读取、修改及冻结入口未接收认证信息；TenantContextInterceptor 在缺少 X-Tenant-Id 时直接放行。TenantServiceImpl.createTenant 只写租户，未绑定首任所有者；冻结未递增权限版本。",
+      "existing_evidence": "缺陷清单；evidence/live-api-results.json 的 4 条租户读写安全失败；TenantController、TenantServiceImpl、PermissionContextService。",
+      "assignee": "Codex",
+      "commit": null,
+      "started_at": "2026-10-14",
+      "completed_at": null,
+      "new_evidence": [
+        "testing/reports/evidence/autonomous-20261014/d07-import-revocation-module.json",
+        "testing/reports/evidence/autonomous-20261014/p0-boundary-green.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-final.json",
+        "testing/reports/evidence/autonomous-20261014/p0-jdbc-idempotency-audit.json",
+        "testing/reports/evidence/autonomous-20261014/p0-module-regression-3.json",
+        "testing/reports/evidence/autonomous-20261014/p0-security-red-cache.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-after-d07.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-after-d09.json",
+        "testing/reports/evidence/autonomous-20261014/p0-security-change-audit-green.json",
+        "testing/reports/evidence/autonomous-20261014/d09-server-module-final.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-playwright.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-id-evidence.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-environment.json"
+      ],
+      "remaining": "角色/ACL/策略/工作空间/部门变更审计已补齐，当前P0真实HTTP30项及最新后端模块回归通过；仍需审计故障事务回滚、完整角色/并发边界及最终联合验收，根因未关闭。"
+    },
+    {
+      "id": "FIX-D05-03",
+      "title": "保护租户读取修改并调整登录入驻流程",
+      "defect": "D05",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/controller/TenantController.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/service/impl/TenantServiceImpl.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/auth/api.ts",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/stores/app.ts",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/api/client.ts",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/scripts/live_api_acceptance.py"
+      ],
+      "problem": "租户 GET/PUT 未鉴权；前端 tenant() 使用 auth:none，保护接口后现有登录顺序可能中断。",
+      "target": "普通有效成员可读本租户；owner/具有 tenant:manage 的有效成员可修改；跨租户拒绝。",
+      "steps": [
+        "服务层检查目标与调用人租户，保留乐观锁",
+        "前端先用全局会话获取自己的 memberships 并 switchTenant，再用租户 token 获取详情",
+        "入驻使用 D05-02；全球会话请求保留 D01 不携带旧租户头规则",
+        "测试夹具改用合法入驻/邀请，删除对匿名成功的业务假设"
+      ],
+      "solution": "如界面切换前需企业名称，在认证后的 membership 列表返回仅本人可见摘要；不恢复匿名详情接口。列举接口不得返回其他租户对象或可枚举存在性信息。",
+      "deps": [
+        "FIX-D05-01",
+        "FIX-D05-02"
+      ],
+      "risk": "前后端顺序共同发布；旧客户端会失败应提示升级/重登。回退使用已鉴权兼容界面，不能撤销服务端保护。基础 API 回归阶段一可用精确整数客户端，完整大 ID 浏览器验证等 D09。",
+      "tests": "真实 HTTP 原 D05 的 4 条失败场景；Playwright 合法登录、入驻、切换、刷新、退出；两租户相同业务编码。",
+      "accept": "原 4 条安全失败全部转为正确拒绝；合法成员读取及授权修改成功；无跨租户写入，乐观锁冲突保持约定响应。",
+      "effort": [
+        1,
+        2
+      ],
+      "phase": 1,
+      "status": "已修复待验证",
+      "priority": "P0",
+      "severity": "Critical",
+      "module": "Spring Boot / Vue3 / MySQL",
+      "root_cause": "TenantController 的创建、读取、修改及冻结入口未接收认证信息；TenantContextInterceptor 在缺少 X-Tenant-Id 时直接放行。TenantServiceImpl.createTenant 只写租户，未绑定首任所有者；冻结未递增权限版本。",
+      "existing_evidence": "缺陷清单；evidence/live-api-results.json 的 4 条租户读写安全失败；TenantController、TenantServiceImpl、PermissionContextService。",
+      "assignee": "Codex",
+      "commit": null,
+      "started_at": "2026-10-14",
+      "completed_at": null,
+      "new_evidence": [
+        "testing/reports/evidence/autonomous-20261014/d07-import-revocation-module.json",
+        "testing/reports/evidence/autonomous-20261014/p0-boundary-green.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-final.json",
+        "testing/reports/evidence/autonomous-20261014/p0-jdbc-idempotency-audit.json",
+        "testing/reports/evidence/autonomous-20261014/p0-module-regression-3.json",
+        "testing/reports/evidence/autonomous-20261014/p0-security-red-cache.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-after-d07.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-after-d09.json",
+        "testing/reports/evidence/autonomous-20261014/p0-security-change-audit-green.json",
+        "testing/reports/evidence/autonomous-20261014/d09-server-module-final.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-playwright.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-id-evidence.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-environment.json"
+      ],
+      "remaining": "角色/ACL/策略/工作空间/部门变更审计已补齐，当前P0真实HTTP30项及最新后端模块回归通过；仍需审计故障事务回滚、完整角色/并发边界及最终联合验收，根因未关闭。"
+    },
+    {
+      "id": "FIX-D05-04",
+      "title": "冻结解冻与旧权限上下文失效",
+      "defect": "D05",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/service/impl/TenantServiceImpl.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/manager/TenantManager.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/mapper/JdbcTenantMapper.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/PermissionContextService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/TaskAuthorizationService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/auth/api.ts"
+      ],
+      "problem": "requireCurrentContext 要求租户 ACTIVE；如果解冻也完全使用普通租户 token，将无法恢复。冻结未提高 permissionVersion 还可能使旧上下文在解冻后重新有效。",
+      "target": "冻结立即阻止新请求和异步结果；只有可信 owner 可通过窄范围恢复流程解冻，解冻后重新签发租户上下文。",
+      "steps": [
+        "明确普通租户冻结权限与 owner 解冻例外",
+        "新增或调整解冻路径为全局有效会话加数据库 owner 验证，仅该操作允许目标 FROZEN",
+        "冻结/解冻事务更新状态、lockVersion 与 permissionVersion，记录审计",
+        "覆盖执行中任务、旧 token、并发状态切换与重放"
+      ],
+      "solution": "不放宽通用 requireCurrentContext 的 ACTIVE 校验。平台运维解冻如已存在则独立凭证、权限和审计；未证实存在时不临时开放通用 admin 开关。版本单调递增，不因回滚还原。",
+      "deps": [
+        "FIX-D05-01",
+        "FIX-D05-03"
+      ],
+      "risk": "保留经审核的恢复入口和状态快照；发现异常保持冻结并通过相同受控流程修复。不得将权限版本回退以恢复旧 token。",
+      "tests": "冻结前后 query/AI/download/sync 结果交付、跨租户 owner、停用 owner、过期 global token、重复冻结/解冻、乐观并发。",
+      "accept": "冻结后所有新租户操作和未交付敏感结果拒绝；授权 owner 可解冻；解冻后旧 tenant token 仍不可用，新上下文可正常使用。",
+      "effort": [
+        1,
+        1.5
+      ],
+      "phase": 1,
+      "status": "已修复待验证",
+      "priority": "P0",
+      "severity": "Critical",
+      "module": "Spring Boot / Vue3 / MySQL",
+      "root_cause": "TenantController 的创建、读取、修改及冻结入口未接收认证信息；TenantContextInterceptor 在缺少 X-Tenant-Id 时直接放行。TenantServiceImpl.createTenant 只写租户，未绑定首任所有者；冻结未递增权限版本。",
+      "existing_evidence": "缺陷清单；evidence/live-api-results.json 的 4 条租户读写安全失败；TenantController、TenantServiceImpl、PermissionContextService。",
+      "assignee": "Codex",
+      "commit": null,
+      "started_at": "2026-10-14",
+      "completed_at": null,
+      "new_evidence": [
+        "testing/reports/evidence/autonomous-20261014/d07-import-revocation-module.json",
+        "testing/reports/evidence/autonomous-20261014/p0-boundary-green.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-final.json",
+        "testing/reports/evidence/autonomous-20261014/p0-jdbc-idempotency-audit.json",
+        "testing/reports/evidence/autonomous-20261014/p0-module-regression-3.json",
+        "testing/reports/evidence/autonomous-20261014/p0-security-red-cache.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-after-d07.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-after-d09.json",
+        "testing/reports/evidence/autonomous-20261014/p0-security-change-audit-green.json",
+        "testing/reports/evidence/autonomous-20261014/d09-server-module-final.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-playwright.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-id-evidence.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-environment.json"
+      ],
+      "remaining": "角色/ACL/策略/工作空间/部门变更审计已补齐，当前P0真实HTTP30项及最新后端模块回归通过；仍需审计故障事务回滚、完整角色/并发边界及最终联合验收，根因未关闭。"
+    },
+    {
+      "id": "FIX-D06-01",
+      "title": "关闭匿名加成员并限制管理者添加",
+      "defect": "D06",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/controller/MemberController.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/MembershipService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/PermissionContextService.java"
+      ],
+      "problem": "已知用户可被匿名加入目标租户，继而合法执行 switchTenant。",
+      "target": "仅 owner 或具备 member:manage 的当前租户管理者能添加目标成员；本人加入走受控邀请。",
+      "steps": [
+        "为 addMember 增加认证上下文及动作校验",
+        "校验目标用户状态、租户状态、重复成员、不可由请求设置 owner",
+        "保持 switchTenant 必须检查当前 active membership，不以头部或旧快照放行",
+        "增加匿名攻击完整链路回归"
+      ],
+      "solution": "认证和动作检查先于成员插入；创建首任 owner 只允许 D05-02 内部事务调用。普通添加接口不可承担匿名初始化。",
+      "deps": [
+        "FIX-D05-01",
+        "FIX-D05-02"
+      ],
+      "risk": "先盘点现有集成和测试夹具。受疑历史成员单独核查授权来源，不批量删除；可审计停用及递增版本。回滚保留关闭匿名的控制。",
+      "tests": "SEC_anonymous_member_add→switch_tenant 全链路；普通/无角色成员、跨租户管理员、停用用户、幂等重试。",
+      "accept": "匿名 add 返回401且成员增量0；攻击用户 switchTenant 失败；授权添加201且只添加一个非 owner 成员。",
+      "effort": [
+        0.5,
+        1
+      ],
+      "phase": 1,
+      "status": "已修复待验证",
+      "priority": "P0",
+      "severity": "Critical",
+      "module": "Spring Boot / MySQL / Vue3",
+      "root_cause": "MemberController.addMember 与 MembershipService.addMember 无调用人鉴权，只校验租户和目标用户状态；有效成员即可由 PermissionContextService.switchTenant 获得上下文。相邻成员/邀请/角色管理服务存在只验证上下文的静态边界缺口，尚未逐入口运行复现。",
+      "existing_evidence": "evidence/live-api-results.json：SEC_anonymous_member_add=201，之后 switch_tenant_global=200；对应控制器和服务源码。",
+      "assignee": "Codex",
+      "commit": null,
+      "started_at": "2026-10-14",
+      "completed_at": null,
+      "new_evidence": [
+        "testing/reports/evidence/autonomous-20261014/d07-import-revocation-module.json",
+        "testing/reports/evidence/autonomous-20261014/p0-boundary-green.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-final.json",
+        "testing/reports/evidence/autonomous-20261014/p0-jdbc-idempotency-audit.json",
+        "testing/reports/evidence/autonomous-20261014/p0-module-regression-3.json",
+        "testing/reports/evidence/autonomous-20261014/p0-security-red-cache.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-after-d07.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-after-d09.json",
+        "testing/reports/evidence/autonomous-20261014/p0-security-change-audit-green.json",
+        "testing/reports/evidence/autonomous-20261014/d09-server-module-final.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-playwright.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-id-evidence.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-environment.json"
+      ],
+      "remaining": "角色/ACL/策略/工作空间/部门变更审计已补齐，当前P0真实HTTP30项及最新后端模块回归通过；仍需审计故障事务回滚、完整角色/并发边界及最终联合验收，根因未关闭。"
+    },
+    {
+      "id": "FIX-D06-02",
+      "title": "成员生命周期与最后所有者约束",
+      "defect": "D06",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/MembershipService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/mapper/MemberMapper.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/mapper/JdbcMemberMapper.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/mapper/InMemoryMemberMapper.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/MemberRoleService.java"
+      ],
+      "problem": "停用/移除已校验上下文并保护 owner，但缺 member:manage；并发变更和存量 owner 修复需要明确事务不变量。",
+      "target": "所有成员状态变更鉴权；正常租户始终至少保留一位有效 owner；撤权立即失效。",
+      "steps": [
+        "停用、移除和角色撤销增加明确动作权限及目标归属",
+        "以租户锁或等效数据库锁保护最后 owner；审计现有 owner 字段更新路径",
+        "如业务已有转移所有者操作，原子转移并防自提权；没有则不新增随意转移入口",
+        "同步 JDBC 与内存实现、更新相关权限版本"
+      ],
+      "solution": "所有者转移只用独立受控服务，禁止通用 member DTO 修改 is_owner。现 JdbcMemberMapper.update 不更新 owner，需专门受控操作；任何 owner 修复均有来源记录。",
+      "deps": [
+        "FIX-D06-01"
+      ],
+      "risk": "备份成员和授权关系；采用事务补偿，不恢复已失效权限版本。历史零 owner 租户由 D05-02 清单处理，不能通过放开匿名修复。",
+      "tests": "最后 owner 并发停用/移除、普通成员改 owner、A 租户管理 B、在途查询撤权。",
+      "accept": "越权操作0成功；并发操作后有效 owner 数不小于1；移除或停用后旧 token 和任务结果访问均失败。",
+      "effort": [
+        1,
+        1.5
+      ],
+      "phase": 1,
+      "status": "已修复待验证",
+      "priority": "P0",
+      "severity": "Critical",
+      "module": "Spring Boot / MySQL / Vue3",
+      "root_cause": "MemberController.addMember 与 MembershipService.addMember 无调用人鉴权，只校验租户和目标用户状态；有效成员即可由 PermissionContextService.switchTenant 获得上下文。相邻成员/邀请/角色管理服务存在只验证上下文的静态边界缺口，尚未逐入口运行复现。",
+      "existing_evidence": "evidence/live-api-results.json：SEC_anonymous_member_add=201，之后 switch_tenant_global=200；对应控制器和服务源码。",
+      "assignee": "Codex",
+      "commit": null,
+      "started_at": "2026-10-14",
+      "completed_at": null,
+      "new_evidence": [
+        "testing/reports/evidence/autonomous-20261014/d07-import-revocation-module.json",
+        "testing/reports/evidence/autonomous-20261014/p0-boundary-green.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-final.json",
+        "testing/reports/evidence/autonomous-20261014/p0-jdbc-idempotency-audit.json",
+        "testing/reports/evidence/autonomous-20261014/p0-module-regression-3.json",
+        "testing/reports/evidence/autonomous-20261014/p0-security-red-cache.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-after-d07.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-after-d09.json",
+        "testing/reports/evidence/autonomous-20261014/p0-security-change-audit-green.json",
+        "testing/reports/evidence/autonomous-20261014/d09-server-module-final.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-playwright.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-id-evidence.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-environment.json"
+      ],
+      "remaining": "角色/ACL/策略/工作空间/部门变更审计已补齐，当前P0真实HTTP30项及最新后端模块回归通过；仍需审计故障事务回滚、完整角色/并发边界及最终联合验收，根因未关闭。"
+    },
+    {
+      "id": "FIX-D06-03",
+      "title": "邀请创建、接受及授权范围闭环",
+      "defect": "D06",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/InvitationService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/controller/InvitationController.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/controller/InvitationAcceptanceController.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/mapper/JdbcInvitationMapper.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/WorkspaceService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/MemberRoleService.java"
+      ],
+      "problem": "邀请创建仅检查租户上下文；请求持久化 roleId/workspaceId，但接受邀请当前只建成员，未兑现该范围绑定。",
+      "target": "邀请必须由有权管理者发起；接受时核实本人邮箱、邀请状态和当前可委派范围，原子加入且不扩大权限。",
+      "steps": [
+        "补邀请管理动作权限，校验角色/工作空间属于同租户",
+        "确定邀请时授权快照与接受时复核规则，撤权邀请不得继续扩权",
+        "在接受事务中按明确契约建立 member/workspace/role 关系并原子消费邀请",
+        "处理过期、并发接受、已成员、角色删除及授权回收"
+      ],
+      "solution": "沿用全局认证与邮箱匹配，邀请 token 哈希存储。默认禁止委派高于邀请者当前可授予范围的权限；owner 不能通过普通邀请设置。空 role 进入无角色默认拒绝状态。",
+      "deps": [
+        "FIX-D06-01",
+        "FIX-D06-02"
+      ],
+      "risk": "现有未消费邀请需要重核范围或作废后重发；保留哈希审计，不记录明文 token。事务失败不消费邀请、不留下部分授权。",
+      "tests": "邮箱不匹配、跨租户 role/workspace、过期重放、双并发接受、发起人被撤权、空角色加入。",
+      "accept": "同邀请最多一次有效加入；角色/工作空间绑定与契约一致；任意子步骤失败净新增关系0；无法通过邀请获得 owner。",
+      "effort": [
+        1,
+        2
+      ],
+      "phase": 1,
+      "status": "已修复待验证",
+      "priority": "P0",
+      "severity": "Critical",
+      "module": "Spring Boot / MySQL / Vue3",
+      "root_cause": "MemberController.addMember 与 MembershipService.addMember 无调用人鉴权，只校验租户和目标用户状态；有效成员即可由 PermissionContextService.switchTenant 获得上下文。相邻成员/邀请/角色管理服务存在只验证上下文的静态边界缺口，尚未逐入口运行复现。",
+      "existing_evidence": "evidence/live-api-results.json：SEC_anonymous_member_add=201，之后 switch_tenant_global=200；对应控制器和服务源码。",
+      "assignee": "Codex",
+      "commit": null,
+      "started_at": "2026-10-14",
+      "completed_at": null,
+      "new_evidence": [
+        "testing/reports/evidence/autonomous-20261014/d07-import-revocation-module.json",
+        "testing/reports/evidence/autonomous-20261014/p0-boundary-green.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-final.json",
+        "testing/reports/evidence/autonomous-20261014/p0-jdbc-idempotency-audit.json",
+        "testing/reports/evidence/autonomous-20261014/p0-module-regression-3.json",
+        "testing/reports/evidence/autonomous-20261014/p0-security-red-cache.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-after-d07.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-after-d09.json",
+        "testing/reports/evidence/autonomous-20261014/p0-security-change-audit-green.json",
+        "testing/reports/evidence/autonomous-20261014/d09-server-module-final.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-playwright.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-id-evidence.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-environment.json"
+      ],
+      "remaining": "角色/ACL/策略/工作空间/部门变更审计已补齐，当前P0真实HTTP30项及最新后端模块回归通过；仍需审计故障事务回滚、完整角色/并发边界及最终联合验收，根因未关闭。"
+    },
+    {
+      "id": "FIX-D06-04",
+      "title": "封闭角色、ACL 和策略管理提权通路",
+      "defect": "D06",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/RolePermissionService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/MemberRoleService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/WorkspaceService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/AccessDecisionService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/DataPolicyService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/DepartmentService.java"
+      ],
+      "problem": "静态阅读显示部分写入口只验证成员上下文；若可自行授予 role 或 ACL，D07 数据源权限会被绕过。此范围为 D06 关联加固，尚非新增已复现缺陷。",
+      "target": "所有权限写入都需要对应管理动作，不能创建系统权限码或自授更高能力。",
+      "steps": [
+        "逐控制器到服务列出角色、成员角色、工作空间成员、部门、ACL、RLS/CLS 的写入口",
+        "权限字典写入改为受控平台/部署路径；租户角色修改要求 role:manage",
+        "workspace:manage、policy:manage、asset ACL manage 按对象归属与可委派范围验证",
+        "保护系统/owner 权限并统一增加版本和审计；为每条写路由新增负向测试"
+      ],
+      "solution": "复用 D05-01 的统一判断，权限字典由受控迁移提供，不让任意全局登录用户定义高权限码。ACL/策略管理权限不能从待修改的那条 ACL 自行推导；保留显式 DENY 优先语义。",
+      "deps": [
+        "FIX-D05-01",
+        "FIX-D06-02"
+      ],
+      "risk": "上线前导出角色/ACL/策略映射，默认不赋全员管理员；收紧后显式修复合法授权。配置回滚只能收敛或恢复审核配置，禁止关闭鉴权。",
+      "tests": "无角色自授 role、修改系统权限码、ACL 自授、策略降级、部门绕过、跨租户对象绑定、正常管理者授权及撤权。",
+      "accept": "入口清单100%覆盖；所有自提权链路失败且无写入；合法授权成功并使旧上下文失效；DENY 优先测试不退化。",
+      "effort": [
+        1.5,
+        2.5
+      ],
+      "phase": 1,
+      "status": "已修复待验证",
+      "priority": "P0",
+      "severity": "Critical",
+      "module": "Spring Boot / MySQL / Vue3",
+      "root_cause": "MemberController.addMember 与 MembershipService.addMember 无调用人鉴权，只校验租户和目标用户状态；有效成员即可由 PermissionContextService.switchTenant 获得上下文。相邻成员/邀请/角色管理服务存在只验证上下文的静态边界缺口，尚未逐入口运行复现。",
+      "existing_evidence": "evidence/live-api-results.json：SEC_anonymous_member_add=201，之后 switch_tenant_global=200；对应控制器和服务源码。",
+      "assignee": "Codex",
+      "commit": null,
+      "started_at": "2026-10-14",
+      "completed_at": null,
+      "new_evidence": [
+        "testing/reports/evidence/autonomous-20261014/d07-import-revocation-module.json",
+        "testing/reports/evidence/autonomous-20261014/p0-boundary-green.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-final.json",
+        "testing/reports/evidence/autonomous-20261014/p0-jdbc-idempotency-audit.json",
+        "testing/reports/evidence/autonomous-20261014/p0-module-regression-3.json",
+        "testing/reports/evidence/autonomous-20261014/p0-security-red-cache.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-after-d07.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-after-d09.json",
+        "testing/reports/evidence/autonomous-20261014/p0-security-change-audit-green.json",
+        "testing/reports/evidence/autonomous-20261014/d09-server-module-final.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-playwright.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-id-evidence.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-environment.json"
+      ],
+      "remaining": "角色/ACL/策略/工作空间/部门变更审计已补齐，当前P0真实HTTP30项及最新后端模块回归通过；仍需审计故障事务回滚、完整角色/并发边界及最终联合验收，根因未关闭。"
+    },
+    {
+      "id": "FIX-D07-01",
+      "title": "定义动作权限与工作空间资产统一模型",
+      "defect": "D07",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/AccessDecisionService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/mapper/InMemoryAccessControlMapper.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/mapper/JdbcAssetAccessMapper.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/WorkspaceService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/sql/mysql.sql",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/sql/mysql_migrations/"
+      ],
+      "problem": "已有权限字典和 ACL 可复用，但数据源/文件/同步动作不完整，内存和 MySQL 权限码种子不一致；仅资源 owner 回退可能让无角色成员获得动作。",
+      "target": "所有目标动作必须同时满足角色能力、有效工作空间成员和对象范围；显式 DENY 优先、默认拒绝。",
+      "steps": [
+        "依据第六节矩阵定义 datasource/file/import/sync 动作及管理范围",
+        "复用 sys_asset/sys_asset_acl 绑定真实资源，不允许虚构 asset_ref_id 获取访问",
+        "统一内存及数据库权限种子；增量迁移归入 D10 兼容分支，不改历史 SQL",
+        "设计存量未绑定资源审计及可信 owner/workspace 回填清单"
+      ],
+      "solution": "增加受控的动作能力判断后复用 ACL，角色能力与对象范围取交集；既有 owner fallback 不可绕过目标动作所需角色。租户 owner 的 IAM 管理能力与资源 owner 分开，资源 DENY 仍优先。",
+      "deps": [
+        "FIX-D06-04"
+      ],
+      "risk": "新权限码和存量映射采用显式迁移，不默认全员 ALLOW；未知资源暂不可访问，提供管理修复清单。兼容已有 RLS/CLS 决策；必要结构只做前向增加。",
+      "tests": "权限判定表驱动单元测试；JDBC/内存种子一致；资源/工作空间错配、角色 DENY、ACL DENY、无角色 owner。",
+      "accept": "矩阵所有格子有测试；无角色无任何受保护业务动作；ACL ALLOW 不能覆盖角色或 ACL DENY；不存在跨租户资产绑定。",
+      "effort": [
+        1,
+        2
+      ],
+      "phase": 2,
+      "status": "已修复待验证",
+      "priority": "P1",
+      "severity": "High",
+      "module": "Spring Boot / Vue3 / MySQL / 异步同步与导入",
+      "root_cause": "DatasourceServiceImpl 未调用动作权限或资产授权服务，创建时未核实工作空间授权。现有 AccessDecisionService 有 RBAC、工作空间成员、ACL 与 DENY 优先能力，但数据源、文件和同步链路未统一接入；文件实体/Mapper 未承载已有 workspace_id、owner_member_id。",
+      "existing_evidence": "evidence/live-api-results.json：SEC_roleless_datasource_create=201；DatasourceServiceImpl、FileEntity、JdbcIngestionMapper、SyncController 静态阅读。",
+      "assignee": "Codex",
+      "commit": null,
+      "started_at": "2026-10-14",
+      "completed_at": null,
+      "new_evidence": [
+        "testing/reports/evidence/autonomous-20261014/d07-datasource-red.json",
+        "testing/reports/evidence/autonomous-20261014/d07-file-red.json",
+        "testing/reports/evidence/autonomous-20261014/d07-import-red.json",
+        "testing/reports/evidence/autonomous-20261014/d07-import-revocation-module.json",
+        "testing/reports/evidence/autonomous-20261014/d07-file-jdbc-green.json",
+        "testing/reports/evidence/autonomous-20261014/d07-frontend-unit.json",
+        "testing/reports/evidence/autonomous-20261014/d07-resource-schema-audit.json",
+        "testing/reports/evidence/autonomous-20261014/d07-resource-schema-applied.json",
+        "testing/reports/evidence/autonomous-20261014/d07-jdbc-authorization-snapshot.json",
+        "testing/reports/evidence/autonomous-20261014/d07-role-resource-matrix.json",
+        "testing/reports/evidence/autonomous-20261014/d07-server-module-final.json",
+        "testing/reports/evidence/autonomous-20261014/d09-jdbc-regression.json"
+      ],
+      "remaining": "数据源/文件/导入/同步后端及排队/运行中撤权已验证；R002/R003已在登记隔离库演练，真实JDBC快照重载及4种角色API矩阵通过。尚缺前端可信动作能力、完整资产/角色负向矩阵、最终发布并发撤权、旧资源审计和全浏览器验收。"
+    },
+    {
+      "id": "FIX-D07-02",
+      "title": "数据源全生命周期动作鉴权",
+      "defect": "D07",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/source/controller/DatasourceController.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/source/service/DatasourceServiceImpl.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/source/store/DatasourceStore.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/source/store/JdbcDatasourceStore.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/source/store/InMemoryDatasourceStore.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/AccessDecisionService.java"
+      ],
+      "problem": "创建、列表、修改、连接测试和元数据入口缺统一动作限制；创建凭据可能先于授权持久化。",
+      "target": "创建须有工作空间 manage；读取/连接测试/修改/停用/删除各自按矩阵鉴权，列表不泄露不可见资源。",
+      "steps": [
+        "为所有实际 datasource 路由映射动作并服务层执行",
+        "鉴权和归属验证放在凭据写入、网络连接之前",
+        "创建资源与资产登记保持事务一致，凭据外部存储失败做补偿",
+        "列表按授权过滤且分页/总数保持一致；凭据引用与敏感错误脱敏"
+      ],
+      "solution": "保存型连接测试检查现有资产 test 权限；未保存连接测试检查目标 workspace 的 create/test 能力。metadata 与 dependency 查询也不得绕过读取权限；更新禁止把资源移到未授权工作空间。",
+      "deps": [
+        "FIX-D07-01"
+      ],
+      "risk": "已有凭据引用不重建、不输出；回滚继续保留鉴权。补偿只能删除本次创建的孤立凭据，不影响其他资源引用。",
+      "tests": "原 roleless201 复现；四角色+owner、跨 workspace、隐藏列表计数、无权连接测试零外呼、创建失败凭据补偿。",
+      "accept": "无角色创建403；授权管理员创建201且资源与资产唯一对应；无权请求数据库/凭据/网络副作用均为0；敏感信息0泄露。",
+      "effort": [
+        1.5,
+        2.5
+      ],
+      "phase": 2,
+      "status": "已修复待验证",
+      "priority": "P1",
+      "severity": "High",
+      "module": "Spring Boot / Vue3 / MySQL / 异步同步与导入",
+      "root_cause": "DatasourceServiceImpl 未调用动作权限或资产授权服务，创建时未核实工作空间授权。现有 AccessDecisionService 有 RBAC、工作空间成员、ACL 与 DENY 优先能力，但数据源、文件和同步链路未统一接入；文件实体/Mapper 未承载已有 workspace_id、owner_member_id。",
+      "existing_evidence": "evidence/live-api-results.json：SEC_roleless_datasource_create=201；DatasourceServiceImpl、FileEntity、JdbcIngestionMapper、SyncController 静态阅读。",
+      "assignee": "Codex",
+      "commit": null,
+      "started_at": "2026-10-14",
+      "completed_at": null,
+      "new_evidence": [
+        "testing/reports/evidence/autonomous-20261014/d07-datasource-red.json",
+        "testing/reports/evidence/autonomous-20261014/d07-file-red.json",
+        "testing/reports/evidence/autonomous-20261014/d07-import-red.json",
+        "testing/reports/evidence/autonomous-20261014/d07-import-revocation-module.json",
+        "testing/reports/evidence/autonomous-20261014/d07-file-jdbc-green.json",
+        "testing/reports/evidence/autonomous-20261014/d07-frontend-unit.json",
+        "testing/reports/evidence/autonomous-20261014/d07-resource-schema-audit.json",
+        "testing/reports/evidence/autonomous-20261014/d07-resource-schema-applied.json",
+        "testing/reports/evidence/autonomous-20261014/d07-jdbc-authorization-snapshot.json",
+        "testing/reports/evidence/autonomous-20261014/d07-role-resource-matrix.json",
+        "testing/reports/evidence/autonomous-20261014/d07-server-module-final.json",
+        "testing/reports/evidence/autonomous-20261014/d09-jdbc-regression.json"
+      ],
+      "remaining": "数据源/文件/导入/同步后端及排队/运行中撤权已验证；R002/R003已在登记隔离库演练，真实JDBC快照重载及4种角色API矩阵通过。尚缺前端可信动作能力、完整资产/角色负向矩阵、最终发布并发撤权、旧资源审计和全浏览器验收。"
+    },
+    {
+      "id": "FIX-D07-03",
+      "title": "文件上传、下载及导入资产范围",
+      "defect": "D07",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ingestion/controller/FileImportController.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ingestion/entity/FileEntity.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ingestion/mapper/JdbcIngestionMapper.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ingestion/mapper/InMemoryIngestionMapper.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ingestion/service/IngestionServiceImpl.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ingestion/manager/FileImportManager.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/sql/mysql.sql"
+      ],
+      "problem": "文件上传只接收 tenant/file；FileEntity 与 insert/select 未读写表中已有 workspace_id 和 owner_member_id，tenant 相同不能代表文件可访问。",
+      "target": "文件从上传到预览、内容下载、创建导入、查询状态均绑定可信 workspace/owner 和资产权限。",
+      "steps": [
+        "DTO/实体/Mapper 增加可信范围并完成双存储实现",
+        "上传前校验工作空间 file:upload；预览/下载校验 file:read/download",
+        "导入同时校验文件和目标 dataset/workspace，creator 取服务端成员",
+        "存量空范围文件从可信 import/job 关系回填，冲突或孤儿隔离；限制直链与缓存交付"
+      ],
+      "solution": "利用现有列，先审计实库是否一致再决定迁移。旧客户端若没传 workspace，只有服务端可唯一确定且授权时兼容；歧义返回明确错误。文件存储写失败/DB失败清理本次孤立对象，不扩大读取范围。",
+      "deps": [
+        "FIX-D07-01"
+      ],
+      "risk": "备份对象元数据和文件清单，保留实际文件；存量推断必须留证据。回滚不取消范围限制，提供兼容读层。下载缓存键含租户与授权上下文，结果交付前再校验。",
+      "tests": "跨租户/跨workspace文件ID、无角色上传、分析师上传与导入、查看者默认禁原始下载、重复导入、事务/对象存储失败。",
+      "accept": "所有文件接口拒绝越权；文件与目标数据集错配不得提交；回填前后文件数量与哈希不变；孤儿文件没有隐式公共权限。",
+      "effort": [
+        2,
+        3
+      ],
+      "phase": 2,
+      "status": "已修复待验证",
+      "priority": "P1",
+      "severity": "High",
+      "module": "Spring Boot / Vue3 / MySQL / 异步同步与导入",
+      "root_cause": "DatasourceServiceImpl 未调用动作权限或资产授权服务，创建时未核实工作空间授权。现有 AccessDecisionService 有 RBAC、工作空间成员、ACL 与 DENY 优先能力，但数据源、文件和同步链路未统一接入；文件实体/Mapper 未承载已有 workspace_id、owner_member_id。",
+      "existing_evidence": "evidence/live-api-results.json：SEC_roleless_datasource_create=201；DatasourceServiceImpl、FileEntity、JdbcIngestionMapper、SyncController 静态阅读。",
+      "assignee": "Codex",
+      "commit": null,
+      "started_at": "2026-10-14",
+      "completed_at": null,
+      "new_evidence": [
+        "testing/reports/evidence/autonomous-20261014/d07-datasource-red.json",
+        "testing/reports/evidence/autonomous-20261014/d07-file-red.json",
+        "testing/reports/evidence/autonomous-20261014/d07-import-red.json",
+        "testing/reports/evidence/autonomous-20261014/d07-import-revocation-module.json",
+        "testing/reports/evidence/autonomous-20261014/d07-file-jdbc-green.json",
+        "testing/reports/evidence/autonomous-20261014/d07-frontend-unit.json",
+        "testing/reports/evidence/autonomous-20261014/d07-resource-schema-audit.json",
+        "testing/reports/evidence/autonomous-20261014/d07-resource-schema-applied.json",
+        "testing/reports/evidence/autonomous-20261014/d07-jdbc-authorization-snapshot.json",
+        "testing/reports/evidence/autonomous-20261014/d07-role-resource-matrix.json",
+        "testing/reports/evidence/autonomous-20261014/d07-server-module-final.json",
+        "testing/reports/evidence/autonomous-20261014/d09-jdbc-regression.json"
+      ],
+      "remaining": "数据源/文件/导入/同步后端及排队/运行中撤权已验证；R002/R003已在登记隔离库演练，真实JDBC快照重载及4种角色API矩阵通过。尚缺前端可信动作能力、完整资产/角色负向矩阵、最终发布并发撤权、旧资源审计和全浏览器验收。"
+    },
+    {
+      "id": "FIX-D07-04",
+      "title": "同步与导入异步任务持续鉴权",
+      "defect": "D07",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ingestion/controller/SyncController.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ingestion/service/IngestionServiceImpl.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ingestion/manager/SyncWorkerManager.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ingestion/manager/ImportWorkerManager.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/TaskAuthorizationService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ingestion/dto/IngestionDtos.java"
+      ],
+      "problem": "同步创建/执行/取消等只有租户头入口；异步 worker 需要避免启动鉴权后撤权仍写入、发布或返回结果。",
+      "target": "控制面与 worker 均检查动作、资源范围和当前权限，后台调度使用服务端可撤销的最小服务身份。",
+      "steps": [
+        "映射 create/read/update/enable/pause/run/cancel/compensate 及导入动作",
+        "复用 TaskAuthorizationService 捕获授权快照，执行前及发布/结果交付前重新校验",
+        "区分用户发起任务和可信调度身份，客户端不可声明 service principal",
+        "撤权后阻止继续读取/发布，妥善标记批次与恢复点，重试保持幂等"
+      ],
+      "solution": "源 datasource、目标 dataset、job/run 需同租户且授权范围一致。权限快照只提供追踪，不替代当前判断；已提交合法数据不能因撤权随意删除，未发布批次按状态机终止/隔离。",
+      "deps": [
+        "FIX-D07-02",
+        "FIX-D07-03"
+      ],
+      "risk": "备份任务/批次/发布状态；新快照字段双读过渡，不信任缺快照的旧任务，暂停并重新授权。回滚保持暂停状态，不能直接以系统无限权限继续。",
+      "tests": "排队中、执行中、发布前、结果读取前撤权；成员停用、租户冻结、重复事件、补偿重跑、用户与调度身份隔离。",
+      "accept": "所有权限失效窗口均无新越权读取/发布/交付；重复任务无重复发布/金额；其他租户任务继续可用。",
+      "effort": [
+        2,
+        3
+      ],
+      "phase": 2,
+      "status": "已修复待验证",
+      "priority": "P1",
+      "severity": "High",
+      "module": "Spring Boot / Vue3 / MySQL / 异步同步与导入",
+      "root_cause": "DatasourceServiceImpl 未调用动作权限或资产授权服务，创建时未核实工作空间授权。现有 AccessDecisionService 有 RBAC、工作空间成员、ACL 与 DENY 优先能力，但数据源、文件和同步链路未统一接入；文件实体/Mapper 未承载已有 workspace_id、owner_member_id。",
+      "existing_evidence": "evidence/live-api-results.json：SEC_roleless_datasource_create=201；DatasourceServiceImpl、FileEntity、JdbcIngestionMapper、SyncController 静态阅读。",
+      "assignee": "Codex",
+      "commit": null,
+      "started_at": "2026-10-14",
+      "completed_at": null,
+      "new_evidence": [
+        "testing/reports/evidence/autonomous-20261014/d07-datasource-red.json",
+        "testing/reports/evidence/autonomous-20261014/d07-file-red.json",
+        "testing/reports/evidence/autonomous-20261014/d07-import-red.json",
+        "testing/reports/evidence/autonomous-20261014/d07-import-revocation-module.json",
+        "testing/reports/evidence/autonomous-20261014/d07-file-jdbc-green.json",
+        "testing/reports/evidence/autonomous-20261014/d07-frontend-unit.json",
+        "testing/reports/evidence/autonomous-20261014/d07-resource-schema-audit.json",
+        "testing/reports/evidence/autonomous-20261014/d07-resource-schema-applied.json",
+        "testing/reports/evidence/autonomous-20261014/d07-jdbc-authorization-snapshot.json",
+        "testing/reports/evidence/autonomous-20261014/d07-role-resource-matrix.json",
+        "testing/reports/evidence/autonomous-20261014/d07-server-module-final.json",
+        "testing/reports/evidence/autonomous-20261014/d09-jdbc-regression.json"
+      ],
+      "remaining": "数据源/文件/导入/同步后端及排队/运行中撤权已验证；R002/R003已在登记隔离库演练，真实JDBC快照重载及4种角色API矩阵通过。尚缺前端可信动作能力、完整资产/角色负向矩阵、最终发布并发撤权、旧资源审计和全浏览器验收。"
+    },
+    {
+      "id": "FIX-D07-05",
+      "title": "前端权限交互及完整接口矩阵回归",
+      "defect": "D07",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/datasources/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/auth/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/stores/app.ts",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/views/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/reports/API覆盖矩阵.md",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/e2e/"
+      ],
+      "problem": "界面角色限制不能替代后端校验；测试以无权限夹具创建资源会掩盖真实默认拒绝要求。",
+      "target": "页面展示与服务端能力一致，撤权后更新状态并可恢复，API 直接调用仍安全。",
+      "steps": [
+        "定位数据源、同步、文件界面及 API 模块，使用服务端能力结果控制动作",
+        "替换匿名/无角色初始化夹具，构造 owner/管理员/分析师/查看者/无角色两租户两工作空间",
+        "逐路由绑定动作与正负用例，覆盖所有实际 alias",
+        "刷新、切租户、403、撤权和 SSE 终止时清理对应页面状态"
+      ],
+      "solution": "隐藏/禁用按钮只是体验；API 拒绝才算安全通过。列表、详情、下载与工作空间选择都应用同一能力，禁止依靠角色显示名判权。",
+      "deps": [
+        "FIX-D07-02",
+        "FIX-D07-03",
+        "FIX-D07-04",
+        "FIX-D09-03",
+        "FIX-D09-04"
+      ],
+      "risk": "界面兼容缺能力字段时默认拒绝并可重新拉取。回滚 UI 不改变后端规则；完整大整数 E2E 在 D09-05 再验。",
+      "tests": "API矩阵与真实浏览器业务链；直接绕过按钮发请求；两个角色切换、撤权后刷新、正常授权创建/导入/同步。",
+      "accept": "全部已映射路由正负断言通过，界面允许项与后端实际一致；不能用跳过/缩小角色矩阵达到通过。",
+      "effort": [
+        1,
+        1.5
+      ],
+      "phase": 2,
+      "status": "处理中",
+      "priority": "P1",
+      "severity": "High",
+      "module": "Spring Boot / Vue3 / MySQL / 异步同步与导入",
+      "root_cause": "DatasourceServiceImpl 未调用动作权限或资产授权服务，创建时未核实工作空间授权。现有 AccessDecisionService 有 RBAC、工作空间成员、ACL 与 DENY 优先能力，但数据源、文件和同步链路未统一接入；文件实体/Mapper 未承载已有 workspace_id、owner_member_id。",
+      "existing_evidence": "evidence/live-api-results.json：SEC_roleless_datasource_create=201；DatasourceServiceImpl、FileEntity、JdbcIngestionMapper、SyncController 静态阅读。",
+      "assignee": "Codex",
+      "commit": null,
+      "started_at": "2026-10-14",
+      "completed_at": null,
+      "new_evidence": [
+        "testing/reports/evidence/autonomous-20261014/d07-datasource-red.json",
+        "testing/reports/evidence/autonomous-20261014/d07-file-red.json",
+        "testing/reports/evidence/autonomous-20261014/d07-import-red.json",
+        "testing/reports/evidence/autonomous-20261014/d07-import-revocation-module.json",
+        "testing/reports/evidence/autonomous-20261014/d07-file-jdbc-green.json",
+        "testing/reports/evidence/autonomous-20261014/d07-frontend-unit.json",
+        "testing/reports/evidence/autonomous-20261014/d07-resource-schema-audit.json",
+        "testing/reports/evidence/autonomous-20261014/d07-resource-schema-applied.json",
+        "testing/reports/evidence/autonomous-20261014/d07-jdbc-authorization-snapshot.json",
+        "testing/reports/evidence/autonomous-20261014/d07-role-resource-matrix.json",
+        "testing/reports/evidence/autonomous-20261014/d07-server-module-final.json",
+        "testing/reports/evidence/autonomous-20261014/d09-jdbc-regression.json"
+      ],
+      "remaining": "数据源/文件/导入/同步后端及排队/运行中撤权已验证；R002/R003已在登记隔离库演练，真实JDBC快照重载及4种角色API矩阵通过。尚缺前端可信动作能力、完整资产/角色负向矩阵、最终发布并发撤权、旧资源审计和全浏览器验收。",
+      "dependency_adjustment": "已先完成安全服务端默认拒绝；前端动作能力必须用精确字符串资源ID及有效缓存上下文查询，因此安排在D09前端基础改造之后，D09-05仍在本任务之后，无循环依赖。"
+    },
+    {
+      "id": "FIX-D09-01",
+      "title": "盘点 ID 契约并确定兼容窗口",
+      "defect": "D09",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/common/dto/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/dto/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ai/dto/AiDtos.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/query/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/auth/types.ts",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/api/client.ts",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/app/schemas/models.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/docs/AI BI 项目接口文档 V1.0.md"
+      ],
+      "problem": "ID 数字分散于 DTO、嵌套 JSON、内部委托、事件、查询维度和客户端持久化；全局 Long 转字符串会误改金额/计数。",
+      "target": "建立资源 ID 字段与所有传输/持久化路径清单，规范 canonical 十进制字符串，独立记录版本/序号的取值范围。",
+      "steps": [
+        "扫描 long/Long、id:number、Number/parseInt、JSON.parse、SSE、缓存及 JSON 状态",
+        "输出字段→来源→消费者→输入兼容→输出类型的契约清单",
+        "只读审计存量 ID 最大值及 unsigned BIGINT 超 Java signed long 情况",
+        "确定客户端先兼容、服务端切换、废弃数字协议的发布/回退顺序"
+      ],
+      "solution": "统一资源 ID 为非空正整数十进制字符串，无浮点或指数。当前 Java 支持范围至 9223372036854775807；若实库更大必须另做 BigInteger 贯通，绝不截断。版本/游标只有证明有界才保留 number。",
+      "deps": [],
+      "risk": "string 输出对旧 number 客户端属于协议变化，必须记录窗口或能力版本，不能声称无条件兼容。现有 /api/v1 别名不等于已存在独立版本协议。",
+      "tests": "以大于2^53的真实 ID 做原始 JSON/浏览器往返契约快照；清单覆盖正常响应、错误详情、数组/map键、嵌套计划、导出及事件。",
+      "accept": "所有外部资源 ID 有字段级清单；金额/数量/时长等非 ID 类型明确；兼容方案有可执行发布门禁与旧状态处置。",
+      "effort": [
+        1,
+        1.5
+      ],
+      "phase": 3,
+      "status": "处理中",
+      "priority": "P1",
+      "severity": "High",
+      "module": "Spring Boot / Vue3 / TypeScript / Pinia / FastAPI 协议",
+      "root_cause": "Java 对外资源 ID 使用 long/Long 数值，前端类型和 Number 转换使用双精度浮点；JSON.parse 时已损失精度。存量真实 ID 5610054153367862925 在浏览器成为 5610054153367863000，导致租户读取和切换 404。",
+      "existing_evidence": "evidence/live-api-results.json、live-browser-results.json、live-browser-failure.png；auth/types.ts、stores/app.ts、api/client.ts。",
+      "assignee": null,
+      "commit": null,
+      "started_at": "2026-10-14T14:43:38.535413+00:00",
+      "completed_at": null,
+      "new_evidence": [
+        "testing/reports/evidence/autonomous-20261014/d09-id-contract-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-id-contract-green-1.json",
+        "testing/reports/evidence/autonomous-20261014/d09-http-id-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-http-id-green-1.json",
+        "testing/reports/evidence/autonomous-20261014/d09-http-id-green-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-raw-document-red-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-raw-document-green-1.json",
+        "testing/reports/evidence/autonomous-20261014/d09-server-module-final.json",
+        "testing/reports/evidence/autonomous-20261014/d09-jdbc-regression.json",
+        "testing/reports/evidence/autonomous-20261014/d09-python-id-red-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-python-id-green-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-python-module.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-context-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-types-5.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-legacy-response-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-legacy-response-green.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-identity-cache-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-final-unit.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-final-check.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-build.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-after-d09.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-playwright.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-id-evidence.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-environment.json"
+      ],
+      "remaining": "已审计294个记录ID字段、249个MVC参数及263个MySQL ID列，无已识别列超出Long范围；304个其他BIGINT列含计数和未归类引用，需逐列核实，SSE/原始商业审计JSON及完整发布兼容窗口仍待核实。"
+    },
+    {
+      "id": "FIX-D09-02",
+      "title": "Java 外部 ID 序列化与严格输入",
+      "defect": "D09",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/common/dto/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/dto/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/source/dto/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ingestion/dto/IngestionDtos.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ai/dto/AiDtos.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/query/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/config/"
+      ],
+      "problem": "数值 JSON 输出在到达 JS 时已经失真；简单在前端 String() 无法恢复。",
+      "target": "对外资源 ID 均输出字符串，服务器保留精确整数存储；窗口期可接收无损的历史整数 JSON token。",
+      "steps": [
+        "按契约为 DTO 字段/集合/嵌套对象增加受控 ID 类型或显式 serializer",
+        "统一 request/path/query/header 的 ID 解析与范围校验",
+        "处理 raw JsonNode、QueryPlan、SSE/导出和代理结果，不靠字段名正则猜测",
+        "同步 OpenAPI 示例及 Java-Python 委托签名契约，签名以实际 canonical bytes 为准"
+      ],
+      "solution": "精确数字 token 由 BigInteger/long 解析后范围校验；字符串只接受规范整数。浮点、小数、指数、空白、负值、超界拒绝。不修改数据库主外键值，不缩小随机生成器范围。Python 内部整数可保留，但边界转换必须明确且 HMAC 一致。",
+      "deps": [
+        "FIX-D09-01"
+      ],
+      "risk": "不用全局 Long serializer 改变金额/统计字段。保留字符串兼容服务版本作回退；旧客户端不支持时强制升级而非降为不安全数字输出。",
+      "tests": "2^53-1、2^53、2^53+1、maxLong、现有失败ID；数组/嵌套/事件、精确数字请求兼容、超界400、签名跨语言。",
+      "accept": "契约清单所有输出 ID 的 JSON token 均为 string 且值原样往返；负向输入稳定4xx无500；数值指标及金额契约不改变。",
+      "effort": [
+        2,
+        3
+      ],
+      "phase": 3,
+      "status": "处理中",
+      "priority": "P1",
+      "severity": "High",
+      "module": "Spring Boot / Vue3 / TypeScript / Pinia / FastAPI 协议",
+      "root_cause": "Java 对外资源 ID 使用 long/Long 数值，前端类型和 Number 转换使用双精度浮点；JSON.parse 时已损失精度。存量真实 ID 5610054153367862925 在浏览器成为 5610054153367863000，导致租户读取和切换 404。",
+      "existing_evidence": "evidence/live-api-results.json、live-browser-results.json、live-browser-failure.png；auth/types.ts、stores/app.ts、api/client.ts。",
+      "assignee": null,
+      "commit": null,
+      "started_at": "2026-10-14T14:43:38.535413+00:00",
+      "completed_at": null,
+      "new_evidence": [
+        "testing/reports/evidence/autonomous-20261014/d09-id-contract-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-id-contract-green-1.json",
+        "testing/reports/evidence/autonomous-20261014/d09-http-id-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-http-id-green-1.json",
+        "testing/reports/evidence/autonomous-20261014/d09-http-id-green-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-raw-document-red-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-raw-document-green-1.json",
+        "testing/reports/evidence/autonomous-20261014/d09-server-module-final.json",
+        "testing/reports/evidence/autonomous-20261014/d09-jdbc-regression.json",
+        "testing/reports/evidence/autonomous-20261014/d09-python-id-red-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-python-id-green-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-python-module.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-context-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-types-5.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-legacy-response-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-legacy-response-green.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-identity-cache-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-final-unit.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-final-check.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-build.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-after-d09.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-playwright.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-id-evidence.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-environment.json"
+      ],
+      "remaining": "字段、集合、已知配置JSON、MVC原始参数与Python模型已修复；后端157项中154通过3项外部未启用，JDBC5项通过，Python33项通过。SSE历史结果/商业审计原始Map、OpenAPI集合格式和真实Java-Python签名联合验收仍待完成。"
+    },
+    {
+      "id": "FIX-D09-03",
+      "title": "TypeScript 与页面 ID 全链路改造",
+      "defect": "D09",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/auth/types.ts",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/auth/api.ts",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/stores/app.ts",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/datasources/types.ts",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/api/client.ts",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/router/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/ai/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/views/"
+      ],
+      "problem": "Pinia 与 API 参数仍为 number，Number(storage/id) 和数值路由转换会再次破坏 ID。",
+      "target": "类型系统、路由、组件 key、表单、接口请求始终传递 ID 字符串。",
+      "steps": [
+        "按模块拆分提交：认证/组织，数据源/导入/同步，语义/图表/看板，AI/商业模块",
+        "引入共用 Id 字符串类型及校验，替换数值转换和错误比较",
+        "检查排序、Map/Set 键、选项值、路由参数、请求体与第三方组件类型",
+        "在后端切换前启用可接收新字符串的客户端，完成类型检查"
+      ],
+      "solution": "资源 ID 不参与算术；不得用 Number 或 parseInt 排序。过渡期旧数字 JSON 必须使用契约驱动无损解析后转 string；如果未引入可靠解析器则只允许协调升级，拒绝 unsafe number，不能 String(已舍入值)。",
+      "deps": [
+        "FIX-D09-01"
+      ],
+      "risk": "新旧状态可能混用，结合 D09-04 版本化；前端回退包必须仍支持字符串协议，不能回退到原 number 版本。",
+      "tests": "Vitest 类型/组件测试、vue类型检查、路由刷新、大ID选择器、请求体原始抓包、构建。",
+      "accept": "资源 ID 无不受控 Number/parseInt 转换；全部模块编译通过；大ID从接口到请求与路由字节一致。",
+      "effort": [
+        2,
+        3
+      ],
+      "phase": 3,
+      "status": "处理中",
+      "priority": "P1",
+      "severity": "High",
+      "module": "Spring Boot / Vue3 / TypeScript / Pinia / FastAPI 协议",
+      "root_cause": "Java 对外资源 ID 使用 long/Long 数值，前端类型和 Number 转换使用双精度浮点；JSON.parse 时已损失精度。存量真实 ID 5610054153367862925 在浏览器成为 5610054153367863000，导致租户读取和切换 404。",
+      "existing_evidence": "evidence/live-api-results.json、live-browser-results.json、live-browser-failure.png；auth/types.ts、stores/app.ts、api/client.ts。",
+      "assignee": null,
+      "commit": null,
+      "started_at": "2026-10-14T14:43:38.535413+00:00",
+      "completed_at": null,
+      "new_evidence": [
+        "testing/reports/evidence/autonomous-20261014/d09-id-contract-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-id-contract-green-1.json",
+        "testing/reports/evidence/autonomous-20261014/d09-http-id-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-http-id-green-1.json",
+        "testing/reports/evidence/autonomous-20261014/d09-http-id-green-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-raw-document-red-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-raw-document-green-1.json",
+        "testing/reports/evidence/autonomous-20261014/d09-server-module-final.json",
+        "testing/reports/evidence/autonomous-20261014/d09-jdbc-regression.json",
+        "testing/reports/evidence/autonomous-20261014/d09-python-id-red-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-python-id-green-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-python-module.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-context-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-types-5.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-legacy-response-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-legacy-response-green.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-identity-cache-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-final-unit.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-final-check.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-build.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-after-d09.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-playwright.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-id-evidence.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-environment.json"
+      ],
+      "remaining": "已迁移前端资源ID类型及表单/字典/路由转换，共享Id与身份API精确兼容读取通过；类型检查、80项单测和构建通过。需补齐所有业务API旧数字响应的受控拒绝/精确兼容、ID请求体守卫和全页面大ID联动。"
+    },
+    {
+      "id": "FIX-D09-04",
+      "title": "缓存持久化与 SSE 状态兼容迁移",
+      "defect": "D09",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/stores/app.ts",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/api/client.ts",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/ai/sse.ts",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/commercial/store/JdbcJsonConcurrentMap.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/app/persistence/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ai/"
+      ],
+      "problem": "历史 localStorage、缓存/商业 JSON 状态及事件回放中可能仍存数字 ID；已舍入的浏览器状态不可逆。",
+      "target": "缓存有 schema 版本，可靠数字可无损升级；不可靠客户端上下文清除并从已认证服务端重建。",
+      "steps": [
+        "逐项列出 storage、query cache、事件游标、checkpoint、sys_commercial_state 的 ID 字段",
+        "新增版本化读取迁移器，安全整数可转字符串，unsafe number 不推断原值",
+        "失真租户/workspace上下文清理后用当前 global会话重取 memberships，重新选择并鉴权",
+        "处理旧事件重放、签名请求和 JSON 状态服务端精确转换，备份原 JSON"
+      ],
+      "solution": "浏览器只清理受影响业务上下文，不随意抹除全部用户存储；服务器 JSON 可按原始整数精确迁移。查询结果 ID 维度依据字段 schema 转换，金额维度不误改。旧 checkpoint 不兼容时显式终止/要求重新发起，不能错绑资源。",
+      "deps": [
+        "FIX-D09-02",
+        "FIX-D09-03"
+      ],
+      "risk": "保存服务端 JSON 原文/校验和、迁移版本和回滚读层；客户端不恢复已损坏 ID。SSE reconnect 游标与资源 ID 分开处理并验证范围。",
+      "tests": "旧安全数字、旧unsafe数字、混合版本、刷新恢复、断线重放、跨租户缓存key、真实商业 JSON 样本。",
+      "accept": "已舍入 ID 不发送到业务接口；合法会话可重建上下文；缓存无跨租户串用；SSE不丢事件/重复终态，原始金额数值不变。",
+      "effort": [
+        1.5,
+        2.5
+      ],
+      "phase": 3,
+      "status": "处理中",
+      "priority": "P1",
+      "severity": "High",
+      "module": "Spring Boot / Vue3 / TypeScript / Pinia / FastAPI 协议",
+      "root_cause": "Java 对外资源 ID 使用 long/Long 数值，前端类型和 Number 转换使用双精度浮点；JSON.parse 时已损失精度。存量真实 ID 5610054153367862925 在浏览器成为 5610054153367863000，导致租户读取和切换 404。",
+      "existing_evidence": "evidence/live-api-results.json、live-browser-results.json、live-browser-failure.png；auth/types.ts、stores/app.ts、api/client.ts。",
+      "assignee": null,
+      "commit": null,
+      "started_at": "2026-10-14T14:43:38.535413+00:00",
+      "completed_at": null,
+      "new_evidence": [
+        "testing/reports/evidence/autonomous-20261014/d09-id-contract-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-id-contract-green-1.json",
+        "testing/reports/evidence/autonomous-20261014/d09-http-id-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-http-id-green-1.json",
+        "testing/reports/evidence/autonomous-20261014/d09-http-id-green-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-raw-document-red-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-raw-document-green-1.json",
+        "testing/reports/evidence/autonomous-20261014/d09-server-module-final.json",
+        "testing/reports/evidence/autonomous-20261014/d09-jdbc-regression.json",
+        "testing/reports/evidence/autonomous-20261014/d09-python-id-red-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-python-id-green-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-python-module.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-context-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-types-5.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-legacy-response-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-legacy-response-green.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-identity-cache-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-final-unit.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-final-check.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-build.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-after-d09.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-playwright.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-id-evidence.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-environment.json"
+      ],
+      "remaining": "身份缓存明确字段安全数字迁移、失真拒绝、ID版本标记、授权重建与最近看板列表迁移已实现并测试；尚需SSE租户/工作空间游标范围、全部商业持久化JSON/检查点历史迁移及缓存完整矩阵。"
+    },
+    {
+      "id": "FIX-D09-05",
+      "title": "大整数及混合版本完整回归",
+      "defect": "D09",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/scripts/live_api_acceptance.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/e2e/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/ai/sse.test.ts",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/test/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/tests/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/reports/evidence/live-browser-results.json"
+      ],
+      "problem": "原真实浏览器登录失败；小 ID 的 mock 用例不能验证兼容性。",
+      "target": "用存量大整数贯穿身份、资源管理、AI、查询与导出，并验证发布顺序与回退包。",
+      "steps": [
+        "建立固定大ID两租户夹具，不改变生产 ID",
+        "执行登录/入驻/切换/刷新、数据源/导入/同步、图表/AI/SSE/导出",
+        "对比原始响应、Pinia、URL、提交体、服务器落库逐值相等",
+        "演练兼容客户端+旧服务、兼容客户端+新服务、旧状态升级与受控回退"
+      ],
+      "solution": "以字段清单为覆盖基准，成功必须同时包含业务结果与 ID 一致断言；保存原失败浏览器截图对应的新网络轨迹。",
+      "deps": [
+        "FIX-D09-02",
+        "FIX-D09-03",
+        "FIX-D09-04",
+        "FIX-D07-05",
+        "FIX-D05-04",
+        "FIX-D06-03"
+      ],
+      "risk": "仅隔离夹具和脱敏样本；旧客户端不支持字符串的组合明确拒绝并提示升级，不能算业务兼容通过。",
+      "tests": "前后端单元/契约/真实API Playwright/Java-Python集成；不同缓存状态与跨租户负向。",
+      "accept": "原登录404消失且ID原样；所有规定边界和契约字段100%通过；未支持组合受控失败、不产生错误资源写入。",
+      "effort": [
+        1,
+        2
+      ],
+      "phase": 3,
+      "status": "处理中",
+      "priority": "P1",
+      "severity": "High",
+      "module": "Spring Boot / Vue3 / TypeScript / Pinia / FastAPI 协议",
+      "root_cause": "Java 对外资源 ID 使用 long/Long 数值，前端类型和 Number 转换使用双精度浮点；JSON.parse 时已损失精度。存量真实 ID 5610054153367862925 在浏览器成为 5610054153367863000，导致租户读取和切换 404。",
+      "existing_evidence": "evidence/live-api-results.json、live-browser-results.json、live-browser-failure.png；auth/types.ts、stores/app.ts、api/client.ts。",
+      "assignee": null,
+      "commit": null,
+      "started_at": "2026-10-14T14:43:38.535413+00:00",
+      "completed_at": null,
+      "new_evidence": [
+        "testing/reports/evidence/autonomous-20261014/d09-id-contract-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-id-contract-green-1.json",
+        "testing/reports/evidence/autonomous-20261014/d09-http-id-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-http-id-green-1.json",
+        "testing/reports/evidence/autonomous-20261014/d09-http-id-green-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-raw-document-red-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-raw-document-green-1.json",
+        "testing/reports/evidence/autonomous-20261014/d09-server-module-final.json",
+        "testing/reports/evidence/autonomous-20261014/d09-jdbc-regression.json",
+        "testing/reports/evidence/autonomous-20261014/d09-python-id-red-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-python-id-green-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-python-module.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-context-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-types-5.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-legacy-response-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-legacy-response-green.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-identity-cache-red.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-final-unit.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-final-check.json",
+        "testing/reports/evidence/autonomous-20261014/d09-frontend-build.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser.json",
+        "testing/reports/evidence/autonomous-20261014/p0-http-after-d09.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-2.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-playwright.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-id-evidence.json",
+        "testing/reports/evidence/autonomous-20261014/d09-live-browser-3-environment.json"
+      ],
+      "remaining": "真实Chromium+专用test内存HTTP双租户大ID登录/切换/刷新和资源请求已通过；前两轮测试脚本故障及独立证据保留。真实JDBC浏览器全业务、混合版本发布/回滚与D07完整前端权限矩阵未完成，因此本任务和D09根因仍不关闭。"
+    },
+    {
+      "id": "FIX-D08-01",
+      "title": "可信租户时区与参考时刻委托契约",
+      "defect": "D08",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ai/dto/AiDtos.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ai/service/AiConversationService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ai/service/AiTaskService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ai/manager/AiDelegationManager.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/service/impl/TenantServiceImpl.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/app/schemas/models.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/app/security/delegation.py"
+      ],
+      "problem": "AI 未收到可信 timezone，运行时自行取UTC now；重试/澄清跨日可能改变同一问题时间范围。",
+      "target": "Java 从已授权租户配置取合法 IANA ZoneId，捕获 referenceNow 并签名，AI 不接受问题文本替代。",
+      "steps": [
+        "扩展 contextVersion 与 timezone/referenceNow 字段；关联 ID 字符串契约",
+        "Java发起/恢复任务时按会话确认上下文固定时刻并校验配置",
+        "FastAPI StrictModel 验证时区和 aware datetime，签名覆盖完整字段",
+        "确定时区变更、过期任务和旧 checkpoint 的兼容规则"
+      ],
+      "solution": "同一分析请求重试与 resume 使用相同时间快照；用户明确改变口径才新建上下文版本。缺失可信时区禁止静默使用宿主机时区；窗口期旧请求由 Java 补可信字段或明确拒绝，不放宽 extra=forbid。",
+      "deps": [
+        "FIX-D09-02"
+      ],
+      "risk": "严格schema滚动部署需先兼容接收再切发送，或协调停机升级；保留受控版本双读。不能为兼容恢复 D02 弱密钥或 D04 naive日期。",
+      "tests": "伪造客户端timezone、非法ZoneId、Java/Python签名一致、恢复跨月、租户配置修改、旧版本拒绝。",
+      "accept": "所有新任务拥有可追溯可信时区与固定时刻；客户端无权覆盖；不兼容请求明确4xx，无500或静默UTC降级。",
+      "effort": [
+        1,
+        1.5
+      ],
+      "phase": 4,
+      "status": "待处理",
+      "priority": "P1",
+      "severity": "High",
+      "module": "FastAPI / LangGraph / Spring Boot / ClickHouse",
+      "root_cause": "graph/builder.py 将“最近、近30天、本月、趋势”归入 UTC now 减 30 天；Java DelegatedContext 未传可信租户时区和固定参考时刻，澄清实现主要针对指标版本。",
+      "existing_evidence": "evidence/ai-business-acceptance.xml：应 2026-10-01，实际 2026-09-13；AiDtos、AiConversationService、graph/builder.py。",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "FIX-D08-02",
+      "title": "自然月、滚动时间及明确日期解析",
+      "defect": "D08",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/app/graph/builder.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/app/schemas/models.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/app/graph/state.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/tests/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/query/manager/QueryPlanCompiler.java"
+      ],
+      "problem": "本月硬编码最近30天；上月和显式日期没有完整确定性语义。",
+      "target": "统一生成本地日历边界，再转换为带时区的左闭右开时间区间；不明确表达澄清。",
+      "steps": [
+        "提取可注入 referenceNow 的确定性时间解析组件",
+        "实现本月、上月、本月累计、最近N天的滚动/完整日区分与明确日期",
+        "按第六节口径处理 DST、闰年、跨年和包含结束日",
+        "验证目标时间字段类型与数据库时区转换，禁止无有效时间字段时取消过滤"
+      ],
+      "solution": "本月=[本地月初,下月初)，上月=[上月初,本月初)；本月累计到referenceNow。最近N天未明确完整自然日或滚动时触发澄清。保留 QueryPlanCompiler 的 >=start AND <end，核实 JDBC/ClickHouse 会话时区与字段类型，不重复偏移。",
+      "deps": [
+        "FIX-D08-01"
+      ],
+      "risk": "口径变更影响历史回答重算，应记录语义版本；旧答案保留原范围证据，不能默默改写。解析失败澄清/拒绝，不退化为无时间过滤。",
+      "tests": "固定时钟 UTC/上海/纽约；月初/月末、12→1月、闰年2月、23/25小时日、明确日期含结束日、错误逆序区间。",
+      "accept": "原本月用例通过；全部确定性金标准边界100%一致；不得出现以30天替代自然月；查询边界无重复或遗漏。",
+      "effort": [
+        1.5,
+        2.5
+      ],
+      "phase": 4,
+      "status": "待处理",
+      "priority": "P1",
+      "severity": "High",
+      "module": "FastAPI / LangGraph / Spring Boot / ClickHouse",
+      "root_cause": "graph/builder.py 将“最近、近30天、本月、趋势”归入 UTC now 减 30 天；Java DelegatedContext 未传可信租户时区和固定参考时刻，澄清实现主要针对指标版本。",
+      "existing_evidence": "evidence/ai-business-acceptance.xml：应 2026-10-01，实际 2026-09-13；AiDtos、AiConversationService、graph/builder.py。",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "FIX-D08-03",
+      "title": "时间澄清及恢复状态机",
+      "defect": "D08",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/app/graph/builder.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/app/graph/state.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/app/schemas/models.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/app/services/task_manager.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/ai/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ai/service/AiTaskService.java"
+      ],
+      "problem": "既有 resolve_ambiguity 以 metric_version_id 为主，不能安全地直接复用为时间选择。",
+      "target": "指标和时间澄清有明确类型，用户选择经校验后恢复原授权/时间快照。",
+      "steps": [
+        "定义 metric/time 澄清 discriminant 及受控候选",
+        "在缺粒度、时区配置错误、多个日期字段等情形 interrupt",
+        "前端显示本地范围/时区/截止规则，resume只提交合法候选",
+        "checkpoint 版本化并验证恢复中权限、成员、租户和上下文版本"
+      ],
+      "solution": "禁止把用户任意timezone/tenant/SQL塞入resume；变更参考时刻需明确新的分析请求。多轮澄清保持原指标和资产绑定，拒绝候选外输入。",
+      "deps": [
+        "FIX-D08-01",
+        "FIX-D08-02",
+        "FIX-D09-04"
+      ],
+      "risk": "旧 checkpoint 未识别新类型时安全失败并提示重试；不能把时间值错误解释为指标ID。缓存按语义版本隔离。",
+      "tests": "时间→指标/指标→时间多轮、非法候选、重复resume、恢复跨月、权限撤销、模型失败与SSE重连。",
+      "accept": "未确定时间前0次查询执行；合法选择只执行一次；越权恢复失败；UI明确展示最终时区及查询范围。",
+      "effort": [
+        1.5,
+        2.5
+      ],
+      "phase": 4,
+      "status": "待处理",
+      "priority": "P1",
+      "severity": "High",
+      "module": "FastAPI / LangGraph / Spring Boot / ClickHouse",
+      "root_cause": "graph/builder.py 将“最近、近30天、本月、趋势”归入 UTC now 减 30 天；Java DelegatedContext 未传可信租户时区和固定参考时刻，澄清实现主要针对指标版本。",
+      "existing_evidence": "evidence/ai-business-acceptance.xml：应 2026-10-01，实际 2026-09-13；AiDtos、AiConversationService、graph/builder.py。",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "FIX-D08-04",
+      "title": "时间口径同源金额端到端验收",
+      "defect": "D08",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/scripts/test_ai_business_acceptance.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/fixtures/ai-question-candidates.json",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/tests/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/test/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/tests/test_clickhouse.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/e2e/"
+      ],
+      "problem": "原时间失败已复现，但规则模型单测不足以证明真实数据范围和最终金额一致。",
+      "target": "数据库→Java→AI→图表按同一已确认时间口径得出相同结果，证据含实际范围及指标版本。",
+      "steps": [
+        "建立各时区月初前后/结束边界订单、退款、取消与软删真值",
+        "先跑解析及SQL参数测试，再在隔离真MySQL/CH执行全链路",
+        "验证本月/上月/累计/最近N天/明确区间及澄清后的最终金额",
+        "为人工标准集增加时间类别，单独报告确定性回归与生产模型评测"
+      ],
+      "solution": "使用 Decimal 真值和字段时区定义；保留原 UTC 测试，新增上海期望 UTC前日16点。可回答集>=95%门禁属于ACC-03，不能用少数时间单测代替。",
+      "deps": [
+        "FIX-D08-03",
+        "FIX-D09-05"
+      ],
+      "risk": "完整实库回归还依赖 D10-05 的兼容克隆环境；可先用新建隔离schema运行，但必须标明非存量验证。不能直接运行写共享 ai_bi_raw 的历史用例。",
+      "tests": "月初边界±最小数据库精度、退款跨月、DST、AI证据与图表比较、不同租户同问题。",
+      "accept": "确定性口径全部通过；同源净额250.00及边界样本逐层一致；失败/澄清/未执行分别统计，不把未执行计为成功。",
+      "effort": [
+        1,
+        2
+      ],
+      "phase": 4,
+      "status": "待处理",
+      "priority": "P1",
+      "severity": "High",
+      "module": "FastAPI / LangGraph / Spring Boot / ClickHouse",
+      "root_cause": "graph/builder.py 将“最近、近30天、本月、趋势”归入 UTC now 减 30 天；Java DelegatedContext 未传可信租户时区和固定参考时刻，澄清实现主要针对指标版本。",
+      "existing_evidence": "evidence/ai-business-acceptance.xml：应 2026-10-01，实际 2026-09-13；AiDtos、AiConversationService、graph/builder.py。",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "FIX-D10-01",
+      "title": "保留可恢复的真实数据库备份",
+      "defect": "D10",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/scripts/p1/Invoke-BackupRestoreDrill.ps1",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/scripts/isolated_backup_drill.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/reports/evidence/backup-verification.json",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/scripts/db.py"
+      ],
+      "problem": "现有证据只覆盖临时库全schema与4条合成订单，原备份脚本表数核对并清理备份不能证明实库可恢复。",
+      "target": "任何实库修复前都有可保留、可解密、经隔离恢复验证的备份与恢复坐标。",
+      "steps": [
+        "只读确认实例/库名、所有者、生产或测试属性及写入来源",
+        "制定备份窗口、数据库一致性方式、binlog/GTID坐标及对象文件/配置关联快照",
+        "生成加密保留备份、清单、SHA-256及访问/保留规则；不纳入Git",
+        "恢复至新隔离库，核对schema、逐表行数、关键数据分块校验及完整性"
+      ],
+      "solution": "备份工具和参数按实库引擎/权限核实；InnoDB一致性快照期间限制DDL，非事务表需适当锁/停写。账号凭据通过受控配置传入，不出现在命令行日志。需用户授权的生产操作在实际执行轮次按原约束处理，本轮只规划。",
+      "deps": [],
+      "risk": "备份会带来I/O与磁盘压力，执行前检查容量与保留空间；备份失败停止迁移。生产恢复必须到新实例/库验证，禁止覆盖原库。",
+      "tests": "可解密/解压、恢复退出码、表/索引/FK/触发器/视图/必要例程、关键行哈希及租户关系；记录恢复耗时。",
+      "accept": "迁移前存在保留备份路径、哈希和成功恢复证据；无凭据泄露；恢复关键表零差异，RTO/RPO实际测量而非引用临时库耗时。",
+      "effort": [
+        1,
+        2
+      ],
+      "phase": 5,
+      "status": "已修复待验证",
+      "priority": "P0",
+      "severity": "High",
+      "module": "MySQL / Python 迁移工具 / Spring Boot JDBC",
+      "root_cause": "2026-10-13 实库结构缺 13 张目标表，历史却记录 BASELINE_001、V001—V008 成功；当前目录为 V002—V007。db.py 会校验基线及同版本 checksum，因此单加新迁移可能在执行前被旧版本冲突阻断。真实 checksum 内容及漂移来源尚待只读审计，不能宣称已证实某个校验和不一致。",
+      "existing_evidence": "evidence/database-details.json；infrastructure/scripts/db.py；mysql.sql 与 mysql_migrations；历史证据不含 checksum。",
+      "assignee": "Codex",
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": [
+        "testing/reports/evidence/autonomous-20261014/backup-created.json",
+        "testing/reports/evidence/autonomous-20261014/backup-restore-verified.json"
+      ],
+      "remaining": "80表、29行加密备份和完整恢复哈希已通过；外部对象/配置备份范围、保留策略和恢复窗口验收仍待补齐。"
+    },
+    {
+      "id": "FIX-D10-02",
+      "title": "只读审计 schema、历史与真实依赖",
+      "defect": "D10",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/scripts/db.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/sql/mysql.sql",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/sql/mysql_migrations/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/reports/evidence/database-details.json",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ingestion/mapper/JdbcIngestionMapper.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ai/mapper/JdbcAiStore.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/commercial/store/CommercialStore.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/MfaService.java"
+      ],
+      "problem": "13张缺表只是历史快照，尚无当前完整列/索引/FK/约束/checksum差异；实际业务不一定直接访问全部专用表。",
+      "target": "建立带时间和数据库身份的不可变审计包，分类缺对象、定义不符、遗失数据和版本来源。",
+      "steps": [
+        "执行第七节只读SQL，导出schema和infrastructure_schema_history全字段",
+        "计算当前每个脚本哈希，寻找历史对应原脚本和部署记录，禁止修改历史",
+        "检查所有 CREATE 与 ALTER、unique/index/FK/default/unsigned/charset，审计孤儿及跨租户关联",
+        "按13表映射定位直接SQL或通用JSON存储，审计列缺失和商业数据实际来源"
+      ],
+      "solution": "原92张表/392FK仅为当时仓库期望，不作未来固定验收数。校验和不同需区分算法/文件编码变化与迁移分支变化；当前无checksum证据不能先判具体冲突。",
+      "deps": [],
+      "risk": "只读连接最小权限，重型哈希/全表扫描在副本或窗口；审计结果脱敏，不导出个人明文。发现未知版本来源停止制定自动修复分支。",
+      "tests": "同一数据库身份重复快照对比；脚本哈希独立复算；逐表业务引用可追溯；手工抽查定义。",
+      "accept": "13表逐项有实际结构与业务映射状态；所有列/索引/FK差异列出；历史每版本有 checksum/success/来源或明确待核实阻断。",
+      "effort": [
+        1,
+        2
+      ],
+      "phase": 5,
+      "status": "处理中",
+      "priority": "P0",
+      "severity": "High",
+      "module": "MySQL / Python 迁移工具 / Spring Boot JDBC",
+      "root_cause": "2026-10-13 实库结构缺 13 张目标表，历史却记录 BASELINE_001、V001—V008 成功；当前目录为 V002—V007。db.py 会校验基线及同版本 checksum，因此单加新迁移可能在执行前被旧版本冲突阻断。真实 checksum 内容及漂移来源尚待只读审计，不能宣称已证实某个校验和不一致。",
+      "existing_evidence": "evidence/database-details.json；infrastructure/scripts/db.py；mysql.sql 与 mysql_migrations；历史证据不含 checksum。",
+      "assignee": "Codex",
+      "commit": null,
+      "started_at": "2026-10-14",
+      "completed_at": null,
+      "new_evidence": [
+        "testing/reports/evidence/autonomous-20261014/environment-and-schema-audit.json",
+        "testing/reports/evidence/autonomous-20261014/migration-baseline-lineage.json"
+      ],
+      "remaining": "原79表基线CRLF字节与历史checksum精确匹配，旧V001—V008来源已核实；前向差异迁移与中断恢复演练待执行。"
+    },
+    {
+      "id": "FIX-D10-03",
+      "title": "建立旧迁移分支的可审计前向修复入口",
+      "defect": "D10",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/scripts/db.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/sql/mysql_migrations/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/tests/test_initialization.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/README.md"
+      ],
+      "problem": "当前执行器先比较旧基线和同版本checksum；旧库已记V008，现目录V002—V007，直接加脚本可能无法越过前置核验。",
+      "target": "识别明确的历史分支后前向修复，旧历史和历史脚本不改写，不对未知数据库跳过校验。",
+      "steps": [
+        "用D10-02证据建立历史版本/checksum与真实schema指纹映射",
+        "设计显式 repair/lineage 子流程或独立追加修复账本，记录批准的前置指纹与文件hash",
+        "支持dry-run、固定数据库身份、迁移互斥锁、逐步骤证据及失败状态",
+        "新迁移版本从全部环境审计后选未占用编号；历史来源未知时硬失败"
+      ],
+      "solution": "保留旧infrastructure_schema_history不变；新修复账本记录从哪个已知分支到哪个目标状态及原始快照。只对白名单精确匹配分支开放修复，不全局忽略checksum。正常新库继续原基线+前向流程。",
+      "deps": [
+        "FIX-D10-02"
+      ],
+      "risk": "这是迁移机制高风险改动，需双人/独立复核其分支匹配和失败路径；回退工具仍保留已追加账本，不伪造成功。禁止删除历史、重算写回checksum或重放基线。",
+      "tests": "旧分支夹具、正常新库、未知checksum、部分失败success=0、并发执行、错数据库、dry-run零写入、重复执行。",
+      "accept": "已知分支可进入唯一修复路径；未知分支/错库/校验变化100%失败关闭；原历史逐行/哈希完全不变。",
+      "effort": [
+        1.5,
+        2.5
+      ],
+      "phase": 5,
+      "status": "待处理",
+      "priority": "P1",
+      "severity": "High",
+      "module": "MySQL / Python 迁移工具 / Spring Boot JDBC",
+      "root_cause": "2026-10-13 实库结构缺 13 张目标表，历史却记录 BASELINE_001、V001—V008 成功；当前目录为 V002—V007。db.py 会校验基线及同版本 checksum，因此单加新迁移可能在执行前被旧版本冲突阻断。真实 checksum 内容及漂移来源尚待只读审计，不能宣称已证实某个校验和不一致。",
+      "existing_evidence": "evidence/database-details.json；infrastructure/scripts/db.py；mysql.sql 与 mysql_migrations；历史证据不含 checksum。",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "FIX-D10-04",
+      "title": "编写精确前向结构与数据修复",
+      "defect": "D10",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/sql/mysql_migrations/V002__ingestion_reliability.sql",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/sql/mysql_migrations/V004__ai_engine_recovery.sql",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/sql/mysql_migrations/V006__commercial_pilot.sql",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/sql/mysql_migrations/V007__commercial_runtime_state.sql",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/scripts/db.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/commercial/store/JdbcJsonConcurrentMap.java"
+      ],
+      "problem": "缺表会影响去重/死信/AI恢复/MFA/商业持久化；漏掉ALTER和历史数据重建会形成表在但业务不一致。",
+      "target": "新脚本按真实差异建立缺失对象、修复必要列和索引，数据迁移不丢失、不误触发业务。",
+      "steps": [
+        "以第七节表映射制作逐对象前置条件和DDL计划，历史SQL仅参考不编辑",
+        "已有对象相同则no-op，不同则明确转换或停止，不能只用IF NOT EXISTS掩盖错误",
+        "增加新IAM/资产兼容迁移并与D07方案核对；服务端ID JSON迁移只改明确ID字段",
+        "历史恢复点、去重账本、支付和用量状态按可信备份重建，未知数据隔离并输出补偿清单"
+      ],
+      "solution": "MySQL DDL隐式提交，分步骤记录已完成状态与对象指纹，失败可从检查点继续；大表采用可评估的在线方式/维护窗口。缺失历史幂等记录不能以空表等同恢复完成，更不能自动重放扣费或同步。",
+      "deps": [
+        "FIX-D10-03",
+        "FIX-D07-01",
+        "FIX-D09-01"
+      ],
+      "risk": "删除/缩窄字段、唯一键清洗、数据去重均不得自动执行；遇冲突保留原记录并审核。回滚通常保留新增表/列，停用新写功能；数据恢复另走受控新库切换。",
+      "tests": "空/正常/部分缺失/定义冲突/脏数据四类克隆，DDL中途故障、重复运行、金额及tenantFK/唯一约束、商业JSON兼容。",
+      "accept": "目标对象定义完整匹配；历史表行数/金额/原记录校验无非预期变化；二次执行不重复写；无法重建的数据显式阻断相关业务。",
+      "effort": [
+        2,
+        3
+      ],
+      "phase": 5,
+      "status": "待处理",
+      "priority": "P1",
+      "severity": "High",
+      "module": "MySQL / Python 迁移工具 / Spring Boot JDBC",
+      "root_cause": "2026-10-13 实库结构缺 13 张目标表，历史却记录 BASELINE_001、V001—V008 成功；当前目录为 V002—V007。db.py 会校验基线及同版本 checksum，因此单加新迁移可能在执行前被旧版本冲突阻断。真实 checksum 内容及漂移来源尚待只读审计，不能宣称已证实某个校验和不一致。",
+      "existing_evidence": "evidence/database-details.json；infrastructure/scripts/db.py；mysql.sql 与 mysql_migrations；历史证据不含 checksum。",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "FIX-D10-05",
+      "title": "存量克隆演练及应用兼容验收",
+      "defect": "D10",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/tests/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/scripts/isolated_database_tests.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/scripts/isolated_backup_drill.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/test/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/reports/evidence/database-details.json"
+      ],
+      "problem": "新建schema通过不代表现有漂移库升级成功；内存profile也不能发现JDBC缺列/表。",
+      "target": "在真实脱敏备份克隆上完整演练备份→前向修复→业务读写→部分故障恢复及应用回退。",
+      "steps": [
+        "恢复D10-01备份到隔离库，应用D10-04脚本并记录步骤时间和锁",
+        "运行JDBC真实持久化、同步去重/死信/AI事件/MFA/商业状态读写",
+        "验证D07新增授权映射与D09旧JSON迁移；对比老兼容应用和目标应用",
+        "演练中途失败重入、只回退应用、保留schema及新库恢复切换"
+      ],
+      "solution": "新建库和旧库升级分别出报告，禁止把其中之一替代另一条路径。业务数据只使用脱敏克隆，外部支付/邮件/同步网络写入禁用或sandbox。",
+      "deps": [
+        "FIX-D10-01",
+        "FIX-D10-04",
+        "FIX-D09-04"
+      ],
+      "risk": "演练环境所有连接和对象存储必须隔离；恢复脚本只允许明确克隆库，防误指共享库。若安全修复版本依赖新schema，回退至兼容安全构建而非原漏洞构建。",
+      "tests": "真实MySQL集成、约束、任务重试、净额250.00、金额分租户对账、DDL故障和应用回退；输出备份/数据校验报告。",
+      "accept": "新库初始化与存量升级均通过；13表及相关ALTER检查全通过；恢复/回退演练零非预期数据差异，安全拒绝规则保持有效。",
+      "effort": [
+        1.5,
+        2.5
+      ],
+      "phase": 5,
+      "status": "待处理",
+      "priority": "P1",
+      "severity": "High",
+      "module": "MySQL / Python 迁移工具 / Spring Boot JDBC",
+      "root_cause": "2026-10-13 实库结构缺 13 张目标表，历史却记录 BASELINE_001、V001—V008 成功；当前目录为 V002—V007。db.py 会校验基线及同版本 checksum，因此单加新迁移可能在执行前被旧版本冲突阻断。真实 checksum 内容及漂移来源尚待只读审计，不能宣称已证实某个校验和不一致。",
+      "existing_evidence": "evidence/database-details.json；infrastructure/scripts/db.py；mysql.sql 与 mysql_migrations；历史证据不含 checksum。",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "FIX-D10-06",
+      "title": "受控迁移执行与存量验收归档",
+      "defect": "D10",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/scripts/db.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/README.md",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/reports/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/plans/修复进度跟踪表.md"
+      ],
+      "problem": "缺少执行窗口、停止条件和数据对账的迁移不能交付生产级验收。",
+      "target": "在实际执行授权范围内按批准脚本迁移，验证目标数据库/应用/数据后才关闭D10。",
+      "steps": [
+        "固定代码/SQLhash、实例标识、当前审计指纹及最新已恢复验证备份",
+        "停相关写入或执行经演练的在线方案，锁迁移并采集各步证据",
+        "结构验收后只开放灰度租户，检查权限、AI/同步/商业状态与金额",
+        "满足停止条件立即冻结相关写入、保留账本和日志，完成回滚/前滚决策"
+      ],
+      "solution": "当前任务只产出此执行步骤，不进行真实迁移。实施轮次必须核实环境及生产操作授权。发布后比较结构指纹、行数/分块hash、租户关联与版本账本，并更新D10状态；不是只检查表数。",
+      "deps": [
+        "FIX-D10-05"
+      ],
+      "risk": "回滚按第七节：优先应用兼容回退+保留增加对象；必须恢复数据时在新库恢复并对齐增量，停写切换。禁止删除历史/改checksum/覆盖原库或回退安全漏洞。",
+      "tests": "迁移后readiness与关键业务冒烟、灰度读写、存量比对、失败停止演练、审计历史不可变验证。",
+      "accept": "所有前后对比零非预期差异，当前目标schema完整；历史记录原样，新账本完整；关键业务真库通过且有回滚点后可标已完成。",
+      "effort": [
+        0.5,
+        1
+      ],
+      "phase": 5,
+      "status": "待处理",
+      "priority": "P1",
+      "severity": "High",
+      "module": "MySQL / Python 迁移工具 / Spring Boot JDBC",
+      "root_cause": "2026-10-13 实库结构缺 13 张目标表，历史却记录 BASELINE_001、V001—V008 成功；当前目录为 V002—V007。db.py 会校验基线及同版本 checksum，因此单加新迁移可能在执行前被旧版本冲突阻断。真实 checksum 内容及漂移来源尚待只读审计，不能宣称已证实某个校验和不一致。",
+      "existing_evidence": "evidence/database-details.json；infrastructure/scripts/db.py；mysql.sql 与 mysql_migrations；历史证据不含 checksum。",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    }
+  ],
+  "additional_tasks": [
+    {
+      "id": "REG-D01",
+      "title": "全局认证不带旧租户头",
+      "phase": 6,
+      "priority": "P0",
+      "owner": "前端/QA",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/api/client.ts",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/api/client.test.ts",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/src/stores/app.ts"
+      ],
+      "deps": [
+        "FIX-D05-03",
+        "FIX-D09-05"
+      ],
+      "action": "保留 D01 已完成状态；本轮后续重跑 global/none/default 请求头测试，登录/切企业/刷新/退出/owner解冻均覆盖 stale header。",
+      "accept": "新回归100%通过；全局请求无自动旧租户头，普通租户请求仍完整鉴权。",
+      "evidence": "frontend-unit-final.xml（历史67通过）；本轮8文件hash一致，不等于运行回归。",
+      "status": "待处理",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "REG-D02",
+      "title": "生产密钥安全启动门禁",
+      "phase": 6,
+      "priority": "P0",
+      "owner": "Java/AI/运维",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/config/ProductionSecretValidation.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/test/java/com/aibi/platform/ProductionSecretValidationTest.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/app/core/config.py"
+      ],
+      "deps": [
+        "FIX-D08-01"
+      ],
+      "action": "保留 D02 已完成；测试缺失/默认/短密钥拒绝启动，合法强密钥正常；分别验证Java prod和AI production，不输出secret。",
+      "accept": "全部弱配置启动失败；合法配置就绪；新增Token密钥也不能复用内部共享密钥。",
+      "evidence": "backend-final JUnit、ai-unit-final.xml；source-changes.json。",
+      "status": "待处理",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "REG-D03",
+      "title": "恶意签名稳定拒绝",
+      "phase": 6,
+      "priority": "P0",
+      "owner": "AI/QA",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/app/security/delegation.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/tests/unit/test_acceptance_validation.py"
+      ],
+      "deps": [
+        "FIX-D08-01",
+        "FIX-D09-02"
+      ],
+      "action": "覆盖非ASCII、畸形base64、缺失/篡改/过期/重放签名与变更后body，确认无工具调用。",
+      "accept": "非法签名401或契约4xx，500为0，工具/数据库副作用为0。",
+      "evidence": "ai-unit-final.xml（历史）；需要新增兼容契约后回归。",
+      "status": "待处理",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "REG-D04",
+      "title": "aware日期入口防回归",
+      "phase": 6,
+      "priority": "P1",
+      "owner": "AI/Java/QA",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/app/schemas/models.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/tests/unit/test_acceptance_validation.py"
+      ],
+      "deps": [
+        "FIX-D08-03"
+      ],
+      "action": "保留 D04 已完成；deadline/expiry/referenceNow/QueryPlan全部拒绝无时区，验证混合合法offset、DST与逆序区间。",
+      "accept": "naive日期稳定422或约定4xx，无TypeError/500；合法带offset日期可查询。",
+      "evidence": "ai-unit-final.xml；本轮source hash一致。",
+      "status": "待处理",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "INT-01",
+      "title": "全量构建、集成、安全及性能发布门禁",
+      "phase": 6,
+      "priority": "P0",
+      "owner": "QA/技术负责人",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/reports/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/reports/API覆盖矩阵.md"
+      ],
+      "deps": [
+        "FIX-D05-04",
+        "FIX-D06-03",
+        "FIX-D06-04",
+        "FIX-D07-05",
+        "FIX-D09-05",
+        "FIX-D08-04",
+        "FIX-D10-06",
+        "REG-D01",
+        "REG-D02",
+        "REG-D03",
+        "REG-D04",
+        "ACC-01",
+        "ACC-02",
+        "ACC-03",
+        "ACC-04",
+        "ACC-05",
+        "ACC-06",
+        "ACC-07",
+        "ACC-08",
+        "RSK-01",
+        "RSK-02",
+        "RSK-03"
+      ],
+      "action": "按第五节执行新版本全量构建、单元、真库API、浏览器、数据一致性和安全；取得ACC/RSK的新证据后再给最终上线结论。",
+      "accept": "Critical/High已确认缺陷清零；所有必选用例执行且通过；第七阶段缺证据时维持NO-GO，不先行宣称全系统通过。",
+      "evidence": "历史基线只作为回归对比，不能当作新版本结果。",
+      "status": "待处理",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "ACC-01",
+      "title": "同源数据全栈与ClickHouse一致性",
+      "phase": 7,
+      "priority": "P1",
+      "owner": "数据/Java/QA",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/tests/test_clickhouse.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/scripts/isolated_database_tests.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/docs/p0-data-reconciliation.md"
+      ],
+      "deps": [
+        "FIX-D10-05",
+        "FIX-D08-04",
+        "FIX-D09-05"
+      ],
+      "action": "隔离MySQL→CH→Java→Vue→AI校验同一订单退款真值250.00，扩展全/增量、去重、迟到、软删、generation/publish_seq和上一有效版本。",
+      "accept": "同一数据快照各层金额完全相等，租户隔离/去重/失败保旧全部通过；保存数据快照与SQL参数。",
+      "evidence": "历史24通过（初始化2、MySQL17、CH5），未完成四层同源。",
+      "status": "待处理",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "ACC-02",
+      "title": "实际API八维覆盖",
+      "phase": 7,
+      "priority": "P1",
+      "owner": "QA/各模块",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/reports/API覆盖矩阵.md",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/scripts/live_api_acceptance.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/docs/AI BI 项目接口文档 V1.0.md"
+      ],
+      "deps": [
+        "FIX-D07-05",
+        "FIX-D09-05",
+        "FIX-D10-05"
+      ],
+      "action": "重新采集实际路由/OpenAPI，逐接口补正常、非法、空边界、认证权限、不存在/跨租户、重复幂等、超时不可用、响应与DB一致性八维；安全审计也含隐藏内部入口及alias。",
+      "accept": "所有实际端点的适用八维100%有用例与结果；N/A附理由并复核；拒绝只验HTTP200。",
+      "evidence": "历史172个公共method/path；并非172×8已执行。",
+      "status": "待处理",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "ACC-03",
+      "title": "人工200题与生产模型评测",
+      "phase": 7,
+      "priority": "P1",
+      "owner": "业务专家/AI/QA",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/fixtures/ai-question-candidates.json",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/reports/07-AI 智能分析专项测试报告.md",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/docs/acceptance-ai-intelligent-analysis.md"
+      ],
+      "deps": [
+        "FIX-D08-04",
+        "FIX-D07-04"
+      ],
+      "action": "人工逐题标注真值、口径、权限、预期澄清/拒答及时间；覆盖七类，冻结至少200题；接实际拟上线模型记录版本和参数再评测。",
+      "accept": "可回答标准题数值和口径正确率>=95%；安全越权100%失败关闭；单列澄清率/拒答率/未执行率，未经人工复核候选不得作分母。",
+      "evidence": "210机器候选均待人工；5条语义检索100%不代表金额准确率。",
+      "status": "待处理",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "ACC-04",
+      "title": "隔离混合负载与端到端性能",
+      "phase": 7,
+      "priority": "P1",
+      "owner": "性能QA/运维",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/tests/performance/mixed-workload.js",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/reports/08-系统性能与高并发测试报告.md"
+      ],
+      "deps": [
+        "RSK-02",
+        "RSK-03",
+        "ACC-07",
+        "FIX-D10-05"
+      ],
+      "action": "准备>=20隔离租户、固定数据规模和监控；执行1/10/30/100VU混合API/图表/看板/AI/同步/下载，200VU可选；每档记录预热、稳态、重复轮次和错误。",
+      "accept": "建议门禁：元数据P95<=500ms、缓存/聚合图表<=3s、看板首屏<=5s、AI终态<=20s、单任务60s；硬件/缓存条件固定，已确认SLO全部满足。",
+      "evidence": "历史未执行；k6不可用、Staging及监控证据缺失。",
+      "status": "待处理",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "ACC-05",
+      "title": "故障恢复与RTO/RPO验收",
+      "phase": 7,
+      "priority": "P1",
+      "owner": "运维/后端/QA",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/scripts/p1/",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/reports/09-异常恢复与容灾测试报告.md"
+      ],
+      "deps": [
+        "FIX-D10-05",
+        "RSK-01",
+        "RSK-02",
+        "ACC-07"
+      ],
+      "action": "在有备份隔离环境执行Java/AI重启、MySQL断连、CH超时、Redis/队列故障、同步中断、checkpoint恢复、SSE重连、在途撤权、重复消费10类；以业务一致性和账本为恢复判据。",
+      "accept": "无越权结果、重复发布或计费；记录实际RTO/RPO并达到实施前确认的目标；未知目标不得宣称达标。",
+      "evidence": "仅临时库4行恢复通过，生产级10类未执行。",
+      "status": "待处理",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "ACC-06",
+      "title": "商业外部依赖和实际持久化验收",
+      "phase": 7,
+      "priority": "P1",
+      "owner": "商业模块/QA/运维",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/commercial/store/CommercialStore.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/commercial/store/JdbcJsonConcurrentMap.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/OidcService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/docs/p1-commercial-pilot-acceptance.md"
+      ],
+      "deps": [
+        "FIX-D10-05",
+        "FIX-D09-04"
+      ],
+      "action": "只测试实际实现部分；配置支付sandbox、邮件测试收件、对象存储和OIDC测试租户，验证回调签名/幂等、租户隔离、退款/用量对账及重启持久化。",
+      "accept": "外部回调和重试不重复扣费/发货/退款，状态与账本一致；未接入项明确未执行，不冒充真实provider测试。",
+      "evidence": "历史未执行；四张商业专用表与通用JSON存储的业务映射待核实。",
+      "status": "待处理",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "ACC-07",
+      "title": "配置端点与多实例环境基线",
+      "phase": 7,
+      "priority": "P1",
+      "owner": "运维",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/README.md",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/infrastructure/.env.example",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/app/core/config.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/reports/01-项目运行环境检查报告.md"
+      ],
+      "deps": [],
+      "action": "从实际配置只读确认MySQL/CH/Redis/RabbitMQ端点、版本及是否启用；准备隔离Staging、多实例Java/AI、真实Redis checkpointer、监控和脱敏fixture。",
+      "accept": "实际使用组件健康/鉴权/连接隔离验证完成；未使用组件明确N/A；CH非默认端口可连不能误判故障；实际CH与部署固定版本差异有验证结论。",
+      "evidence": "CH已运行，历史SELECT版本26.9.14.10，compose固定25.8.4.13；默认Redis/Rabbit端口不通不足以证明服务不存在。",
+      "status": "待处理",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "ACC-08",
+      "title": "完整真实浏览器业务与界面质量",
+      "phase": 7,
+      "priority": "P1",
+      "owner": "前端/QA",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/frontend/e2e/critical-flows.spec.ts",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/testing/reports/04-前端 E2E 测试报告.md",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/docs/frontend-release-acceptance.md"
+      ],
+      "deps": [
+        "FIX-D09-05",
+        "FIX-D08-03",
+        "FIX-D10-05"
+      ],
+      "action": "真实API走数据源→导入→数据集/指标→图表/看板→AI证据，补Loading/Empty/Error/Forbidden/Timeout、刷新返回、重复提交、布局和约定浏览器矩阵；采集大表格和长会话内存。",
+      "accept": "核心业务链全部通过；跨租户切换无旧数据残留；约定浏览器无阻断；性能实测而非以构建成功代替。",
+      "evidence": "历史5个mock API页面通过、真实登录失败；前端大chunk仅警告，未确认为性能缺陷。",
+      "status": "待处理",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "RSK-01",
+      "title": "Token签名密钥多实例与轮换风险核实",
+      "phase": 7,
+      "priority": "P1",
+      "owner": "Java/安全/运维",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/security/TokenService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/identity/service/SessionService.java",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/config/ProductionSecretValidation.java"
+      ],
+      "deps": [
+        "FIX-D05-01",
+        "ACC-07"
+      ],
+      "action": "静态已见signingKey=randomBytes(32)按进程生成；先复现A签发B验证/重启行为，再设计共享受控key ring、kid、双读单写轮换、吊销与缺配置启动失败，更新密钥管理和测试。",
+      "accept": "两个实例互认合法token，撤销同步生效；轮换窗口按TTL/会话策略验证，旧key过期拒绝；不保留公开默认key、不混用AI共享secret。",
+      "evidence": "源码确定使用进程随机key；生产多实例故障尚未动态验证。不得直接记成第11项确认缺陷。",
+      "status": "待处理",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "RSK-02",
+      "title": "AI线程池排队上限与租户隔离风险核实",
+      "phase": 7,
+      "priority": "P1",
+      "owner": "AI/运维",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/app/services/task_manager.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/app/core/config.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/app/persistence/task_store.py"
+      ],
+      "deps": [
+        "ACC-07"
+      ],
+      "action": "静态ThreadPoolExecutor只有max_workers，submit/resume/recovery缺显式排队上限；验证过载后实现全局+租户有界准入、拒绝/退避、恢复任务限速、取消释放配额及指标。",
+      "accept": "超上限稳定429/503且可重试，进程内存/队列有界；submit、resume、启动恢复均受限；崩溃/取消不泄漏配额，单租户不饿死其他租户。",
+      "evidence": "源码路径已定位，未压测证明实际内存耗尽。更改前须复现和量化，风险与确认缺陷分列。",
+      "status": "待处理",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    },
+    {
+      "id": "RSK-03",
+      "title": "修正AI性能统计与成功率口径",
+      "phase": 7,
+      "priority": "P1",
+      "owner": "性能QA/AI",
+      "files": [
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/tests/performance/mixed-workload.js",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/ai-service/app/services/task_manager.py",
+        "D:/1/Desktop/系统开发/AI BI 智能数据分析平台/ai-bi-platform/backend/src/main/java/com/aibi/platform/ai/service/AiTaskService.java"
+      ],
+      "deps": [],
+      "action": "现脚本只计HTTP202且429允许；新增accepted→terminal耗时、排队/执行/首事件分项，轮询或SSE终态校验业务信封/真值，独立统计限流、超时、失败、澄清和成功。",
+      "accept": "P95 AI统计实际终态而非入队；429不计业务成功，澄清独立分类；原始时间戳可重算P50/P95/P99，超时与未结束任务均进入报告。",
+      "evidence": "静态脚本统计缺口已核实；实际性能好坏仍未知。",
+      "status": "待处理",
+      "assignee": null,
+      "commit": null,
+      "started_at": null,
+      "completed_at": null,
+      "new_evidence": []
+    }
+  ],
+  "execution_run": "autonomous-20261014",
+  "last_execution_update": "2026-10-14T14:50:03.571116+00:00"
+}

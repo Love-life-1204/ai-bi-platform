@@ -1,0 +1,49 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+
+app:
+  connector:
+    master-key: ${DATASOURCE_MASTER_KEY:}
+    allow-private-network: ${DATASOURCE_ALLOW_PRIVATE_NETWORK:false}
+  datasource:
+    enabled: true
+    mysql:
+      jdbc-url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:ai_bi_core}?useUnicode=true&characterEncoding=UTF-8&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&sslMode=DISABLED
+      username: ${MYSQL_APP_USER:aibi_api}
+      password: ${MYSQL_APP_PASSWORD}
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      pool-name: mysql-pool
+      minimum-idle: 2
+      maximum-pool-size: 10
+      connection-timeout-ms: 3000
+      validation-timeout-ms: 1000
+      idle-timeout-ms: 600000
+      max-lifetime-ms: 1800000
+    clickhouse:
+      jdbc-url: jdbc:clickhouse://${CLICKHOUSE_HOST:127.0.0.1}:${CLICKHOUSE_PORT:8123}/${CLICKHOUSE_DATABASE:ai_bi_dws}
+      username: ${CLICKHOUSE_APP_USER:aibi_reader}
+      password: ${CLICKHOUSE_APP_PASSWORD}
+      driver-class-name: com.clickhouse.jdbc.ClickHouseDriver
+      pool-name: clickhouse-read-pool
+      read-only: true
+      minimum-idle: 1
+      maximum-pool-size: 8
+      connection-timeout-ms: 5000
+      validation-timeout-ms: 2000
+      idle-timeout-ms: 300000
+      max-lifetime-ms: 900000
+    clickhouse-writer:
+      jdbc-url: jdbc:clickhouse://${CLICKHOUSE_HOST:127.0.0.1}:${CLICKHOUSE_PORT:8123}/${CLICKHOUSE_WRITER_DATABASE:ai_bi_raw}
+      username: ${CLICKHOUSE_WRITER_USER:aibi_ingestion_worker}
+      password: ${CLICKHOUSE_WRITER_PASSWORD}
+      driver-class-name: com.clickhouse.jdbc.ClickHouseDriver
+      pool-name: clickhouse-writer-pool
+      read-only: false
+      minimum-idle: 1
+      maximum-pool-size: 4
+      connection-timeout-ms: 5000
+      validation-timeout-ms: 2000
+      idle-timeout-ms: 300000
+      max-lifetime-ms: 900000

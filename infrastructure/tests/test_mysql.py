@@ -6,7 +6,7 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'scripts'))
-from db import connect, mysql_tables, schema_sql
+from db import connect, mysql_foreign_keys, mysql_tables
 import pymysql
 
 
@@ -50,9 +50,9 @@ class DatabaseTests(unittest.TestCase):
 
     def test_final_schema(self):
         tables = mysql_tables()
-        foreign_keys = re.findall(r'ADD CONSTRAINT `(fk_\d+)`', schema_sql('mysql'))
-        self.assertEqual(len(tables), 79)
-        self.assertEqual(len(foreign_keys), 379)
+        foreign_keys = mysql_foreign_keys()
+        self.assertEqual(len(tables), len(set(tables)))
+        self.assertEqual(len(foreign_keys), len(set(foreign_keys)))
         self.cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name <> 'infrastructure_schema_history'")
         self.assertEqual(set(tables), {x[0] for x in self.cur.fetchall()})
         self.cur.execute("SELECT COUNT(*) FROM information_schema.referential_constraints WHERE constraint_schema=DATABASE()")
@@ -61,6 +61,45 @@ class DatabaseTests(unittest.TestCase):
     def test_shared_user_and_same_workspace_code(self):
         self.cur.execute('SELECT COUNT(*) FROM sys_tenant_member WHERE user_id=%s', (self.user,))
         self.assertEqual(self.cur.fetchone()[0], 2)
+
+    def test_tenant_code_is_globally_unique(self):
+        self.reject(1062, lambda: self.insert(
+            'sys_tenant', tenant_code='test_a_'+self.tag, tenant_name='重复租户'))
+
+    def test_tenant_basic_info_update_uses_optimistic_lock(self):
+        statement = '''
+            UPDATE sys_tenant
+               SET tenant_name=%s, timezone=%s, default_currency=%s,
+                   lock_version=lock_version+1
+             WHERE id=%s AND lock_version=%s AND deleted_at IS NULL
+        '''
+        self.cur.execute(statement, ('修改后企业', 'UTC', 'USD', self.ta, 0))
+        self.assertEqual(self.cur.rowcount, 1)
+        self.cur.execute(statement, ('旧版本覆盖', 'UTC', 'USD', self.ta, 0))
+        self.assertEqual(self.cur.rowcount, 0)
+        self.cur.execute('''
+            SELECT tenant_code, tenant_name, timezone, default_currency, lock_version
+              FROM sys_tenant WHERE id=%s
+        ''', (self.ta,))
+        self.assertEqual(
+            self.cur.fetchone(),
+            ('test_a_'+self.tag, '修改后企业', 'UTC', 'USD', 1))
+
+    def test_tenant_freeze_unfreeze_uses_optimistic_lock(self):
+        self.cur.execute('''
+            UPDATE sys_tenant
+               SET tenant_status='FROZEN', lock_version=lock_version+1
+             WHERE id=%s AND tenant_status='ACTIVE' AND lock_version=0
+        ''', (self.ta,))
+        self.assertEqual(self.cur.rowcount, 1)
+        self.cur.execute('''
+            UPDATE sys_tenant
+               SET tenant_status='ACTIVE', lock_version=lock_version+1
+             WHERE id=%s AND tenant_status='FROZEN' AND lock_version=1
+        ''', (self.ta,))
+        self.assertEqual(self.cur.rowcount, 1)
+        self.cur.execute('SELECT tenant_status, lock_version FROM sys_tenant WHERE id=%s', (self.ta,))
+        self.assertEqual(self.cur.fetchone(), ('ACTIVE', 2))
 
     def test_cross_tenant_workspace_rejected(self):
         self.reject(1452, lambda: self.dataset(workspace=self.wb))
@@ -100,6 +139,28 @@ class DatabaseTests(unittest.TestCase):
         self.insert('saas_quota_ledger', tenant_id=self.ta, quota_balance_id=balance, business_event_key='reserve-1', reservation_key='r1', event_type='RESERVE', amount=7, occurred_at='2026-10-09')
         self.reject(1062, lambda: self.insert('saas_quota_ledger', tenant_id=self.ta, quota_balance_id=balance, business_event_key='reserve-1', reservation_key='r1', event_type='RESERVE', amount=7, occurred_at='2026-10-09'))
 
+    def test_commercial_runtime_state_is_durable_and_unique(self):
+        self.cur.execute('''
+            INSERT INTO sys_commercial_state
+                (namespace_code, state_key, value_type, payload_json)
+            VALUES ('quotas', %s, 'QuotaBalance', %s)
+        ''', (self.tag, '{"limit":100,"used":1}'))
+        self.reject(1062, lambda: self.cur.execute('''
+            INSERT INTO sys_commercial_state
+                (namespace_code, state_key, value_type, payload_json)
+            VALUES ('quotas', %s, 'QuotaBalance', %s)
+        ''', (self.tag, '{"limit":100,"used":2}')))
+        self.cur.execute('''
+            UPDATE sys_commercial_state SET payload_json=%s
+             WHERE namespace_code='quotas' AND state_key=%s
+        ''', ('{"limit":100,"used":2}', self.tag))
+        self.cur.execute('''
+            SELECT JSON_EXTRACT(payload_json, '$.used')
+              FROM sys_commercial_state
+             WHERE namespace_code='quotas' AND state_key=%s
+        ''', (self.tag,))
+        self.assertEqual(int(self.cur.fetchone()[0]), 2)
+
     def test_outbox_inbox_deduplication(self):
         self.insert('sys_inbox_dedup', tenant_id=self.ta, consumer_code='worker', event_key='event1', processed_at='2026-10-09')
         self.reject(1062, lambda: self.insert('sys_inbox_dedup', tenant_id=self.ta, consumer_code='worker', event_key='event1', processed_at='2026-10-09'))
@@ -113,8 +174,13 @@ class DatabaseTests(unittest.TestCase):
         self.reject(1451, lambda: self.cur.execute('DELETE FROM sys_tenant WHERE id=%s', (self.ta,)))
 
     def test_permission_dictionary(self):
-        self.cur.execute('SELECT COUNT(*) FROM sys_permission')
-        self.assertEqual(self.cur.fetchone()[0], 20)
+        self.cur.execute('SELECT permission_code FROM sys_permission')
+        codes = {row[0] for row in self.cur.fetchall()}
+        self.assertEqual(len(codes), 26)
+        self.assertTrue({
+            'report:export', 'ai:ask', 'audit:read', 'subscription:manage',
+            'import:manage', 'sync:manage', 'quality:manage'
+        }.issubset(codes))
 
 
 if __name__ == '__main__':

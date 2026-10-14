@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ai-bi-engine"
+version = "0.1.0"
+description = "LangGraph driven, permission-bound AI analytics service"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "httpx>=0.28,<1",
+  "langgraph>=0.6,<2",
+  "langgraph-checkpoint-sqlite>=2,<4",
+  "pydantic>=2.10,<3",
+  "uvicorn[standard]>=0.34,<1",
+]
+
+[project.optional-dependencies]
+redis = ["langgraph-checkpoint-redis>=0.1,<1"]
+test = ["pytest>=8,<10", "pytest-asyncio>=0.25,<2"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+asyncio_mode = "auto"
+

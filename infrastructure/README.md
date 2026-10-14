@@ -1,6 +1,6 @@
 # 数据库配置与初始化
 
-数据库入口集中在本目录。`sql/mysql.sql` 和 `sql/clickhouse.sql` 是两种数据库各自唯一的最终初始化 SQL；连接配置统一从 `.env` 读取，环境变量可覆盖同名配置。
+数据库入口集中在本目录。`sql/mysql.sql` 和 `sql/clickhouse.sql` 是新库基线；MySQL 后续变更使用 `sql/mysql_migrations/VNNN__*.sql` 前向迁移。连接配置统一从 `.env` 读取，环境变量可覆盖同名配置。
 
 ## 目录
 
@@ -10,17 +10,20 @@ infrastructure/
 ├── .env                         # 本机连接凭据，不提交
 ├── requirements.txt             # Conda 环境内安装的 PyMySQL 固定依赖
 ├── sql/
-│   ├── mysql.sql                # 79 张表、379 个外键、20 个权限码
+│   ├── mysql.sql                # MySQL 新库基线
+│   ├── mysql_migrations/        # 有序、校验和可审计的前向迁移
 │   └── clickhouse.sql           # 4 个库、8 张业务表
 ├── docker/compose.yaml          # ClickHouse 本地启动
 ├── scripts/
 │   ├── Initialize-Database.ps1  # Windows 统一入口
 │   ├── db.py                    # 连接、基线检查、初始化与状态
-│   └── provision_mysql_roles.py # 应用与 Worker 表级运行角色
+│   ├── provision_mysql_roles.py # 应用与 Worker 表级运行角色
+│   └── provision_clickhouse_roles.py # ClickHouse 查询/导入最小权限角色
+├── security/README.md              # 运行账号最小权限说明
 └── tests/                       # 初始化保护、MySQL 约束、ClickHouse 口径回归
 ```
 
-脚本使用当前激活的 Python 环境，不再优先加载项目内依赖缓存。已删除分版本 SQL、建表生成器、重复结构清单、Word 提取文本和 Python 缓存。字段字典保留在 [MySQL 数据字典](../docs/mysql_data_dictionary.md)，原始需求与设计文档保留在 `docs/`。
+脚本使用当前激活的 Python 环境。基线之后的结构变更保存为分版本前向 SQL，字段字典保留在 [MySQL 数据字典](../docs/mysql_data_dictionary.md)，原始需求与设计文档保留在 `docs/`。
 
 ## 配置与运行
 
@@ -32,7 +35,7 @@ conda activate AI_BI_Platform
 python -m pip install -r infrastructure/requirements.txt
 ```
 
-首次环境复制 `.env.example` 为 `.env`，填入 MySQL 连接密码。现有 `.env` 不会被初始化脚本覆盖。MySQL 使用本机服务，配置不再包含未使用的 MYSQL_ROOT_PASSWORD。
+首次环境复制 `.env.example` 为 `.env`，填入 MySQL 连接密码。现有 `.env` 不会被初始化脚本覆盖。MySQL 使用本机服务；ClickHouse 查询与导入 Worker 分别配置读、写账号。
 
 从项目根目录执行：
 
@@ -51,13 +54,29 @@ ClickHouse 使用 Docker Desktop 的 Linux 容器。填入非空 CLICKHOUSE_PASS
 
 使用已有实例时填写 CLICKHOUSE_HTTP_URL、CLICKHOUSE_USER、CLICKHOUSE_PASSWORD，并去掉 `-StartClickHouse`。Compose 仅启动 ClickHouse，使用持久卷、健康检查与 127.0.0.1 端口绑定。不要使用 `down -v` 清理业务数据。远程 ClickHouse 连接应使用 HTTPS。
 
+## RabbitMQ
+
+RabbitMQ 使用独立 Compose 文件，远程宿主机只绑定回环地址上的 TLS 5671 和管理端口 15672，
+本机必须通过 SSH 隧道访问。部署、证书、最小权限、队列拓扑、故障恢复和验收证据见
+[RabbitMQ 实施与验收记录](../docs/rabbitmq-implementation-and-acceptance-2026-10-14.md)。
+
+```powershell
+Copy-Item infrastructure/docker/rabbitmq/.env.example infrastructure/docker/rabbitmq/.env
+./infrastructure/scripts/Deploy-RabbitMqRemote.ps1 -SshHost <remote-host>
+./infrastructure/scripts/Start-RabbitMqTunnel.ps1 -SshHost <remote-host>
+./infrastructure/scripts/Invoke-RabbitMqAcceptance.ps1 -SshHost <remote-host>
+```
+
+`.env`、TLS 私钥和客户端信任库均不会提交。不要把 RabbitMQ 端口改为 `0.0.0.0`，也不要使用
+`docker compose down -v` 删除业务消息卷。
+
 ## 初始化与已落库环境
 
-MySQL 首次执行会创建配置指定的库以及 `infrastructure_schema_history`，再执行最终 SQL。所有业务 DDL 与种子数据均来自 `sql/mysql.sql`；脚本只额外管理数据库和初始化历史。
+MySQL 首次执行会创建配置指定的库以及 `infrastructure_schema_history`，先执行基线，再按版本顺序执行未应用的前向迁移。历史表保存文件校验和；已记录版本被改写时立即停止。
 
 已执行旧 V001—V008 的本机环境，脚本根据最终 SQL 文件头保存的旧校验和、完整成功记录及表/外键清单确认兼容，只登记 `BASELINE_001`，不重建业务表、不重新插入权限码。旧记录保留在数据库中用于审计，项目不再保存旧 SQL 文件。以后重复运行检查最终文件 SHA-256，一致则跳过。
 
-无可识别历史的非空库、失败记录、文件校验和变化都停止执行。MySQL DDL 隐式提交，失败需检查实际已执行语句并前滚修复，不能删除失败记录后盲目重跑。最终 SQL 是初始化快照，不是任意已有库的覆盖脚本；今后结构变更需另行设计升级方案，禁止直接修改最终 SQL 后向现有库重放。
+无可识别历史的非空库、失败记录、文件校验和变化都停止执行。MySQL DDL 隐式提交，失败需检查实际已执行语句并前滚修复，不能删除失败记录后盲目重跑。基线 SQL 是新库快照，今后结构变更必须新增前向迁移，禁止改写已执行文件后向现有库重放。
 
 ClickHouse 基线使用 `IF NOT EXISTS`，成功后在 `ai_bi_ops.schema_history` 记录校验和。中断后可补建缺失对象；既有对象的列类型等仍需核对 `SHOW CREATE TABLE`，`IF NOT EXISTS` 不代表结构一致。迁移锁依赖 MySQL，执行 ClickHouse 初始化时 MySQL 也必须可连接。
 
@@ -68,9 +87,10 @@ ClickHouse 基线使用 `IF NOT EXISTS`，成功后在 `ai_bi_ops.schema_history
 - 当前语义版本必须属于同一资产；发布批次和物理指针的数据集、代、序号相互匹配。工作空间拥有者及其 membership 在同事务创建。
 - 金额使用有符号 BIGINT 最小货币单位；配额余额受 CHECK 保护。支付渠道事件在全库唯一，AI 供应商请求键包含 provider_code。
 - `aibi_api_role`、`aibi_worker_role` 按表授权，不授予 DDL；审计、账本和不可变版本限制 SELECT/INSERT。由管理员为应用创建独立登录账号、授予角色并 SET DEFAULT ROLE，不能把 root 用作应用账号。
+- `aibi_query_role` 仅对 ClickHouse DWD/DWS 库授予 SELECT；`aibi_ingestion_role` 仅允许写入 RAW 收件表和批次回执表。账号创建、密码和角色绑定要求见 `security/README.md`。
 - 角色脚本只增加明确列出的授权，不清除既有额外授权；已有角色需要单独审计。字段定义以最终 SQL 为准，权限脚本与测试直接读取 SQL 表清单，无第二份生成模型。
 
-原始数据库文档提到的 SQL 附件未在项目中提供；当前字段和约束是依据正文补齐的实现。379 个外键包括通用审计用户、租户根引用和强化的资产归属约束，因此不同于原文附件统计的 183 个。
+原始数据库文档提到的 SQL 附件未在项目中提供；当前字段和约束是依据正文补齐的实现。基线和全部前向迁移合计 387 个外键，包括通用审计用户、租户根引用、强化的资产归属约束以及 AI 恢复链路，因此不同于原文附件统计的 183 个。
 
 ## 服务层必须实现的事务规则
 
@@ -86,7 +106,7 @@ ClickHouse 基线使用 `IF NOT EXISTS`，成功后在 `ai_bi_ops.schema_history
 
 ## 版本与验证
 
-记录日期：2026-10-09（Asia/Shanghai）。
+记录日期：2026-10-10（Asia/Shanghai）。
 
 | 项目 | 状态 |
 |---|---|
@@ -95,7 +115,7 @@ ClickHouse 基线使用 `IF NOT EXISTS`，成功后在 `ai_bi_ops.schema_history
 | MySQL 8.4 LTS | 设计建议版本，本次未升级或验证 |
 | ClickHouse 25.8.4.13 | 已固定开发镜像 tag，尚未拉取或运行；digest 待验证 |
 | MySQL 约束回归 | 13 项通过：租户引用、版本归属、批次、配额、幂等、软删、RESTRICT 等 |
-| 最终基线 | 已验证旧库接管、重复跳过、独立空库初始化及失败/校验和保护 |
+| 基线与前向迁移 | 已验证旧库接管、空库初始化、V002 顺序应用、重复跳过及校验和保护 |
 | ClickHouse | 4 库/8 表静态检查；真库与分析 SQL 测试尚未执行 |
 
 ```powershell

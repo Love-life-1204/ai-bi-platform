@@ -124,3 +124,20 @@ CREATE TABLE IF NOT EXISTS ai_bi_ops.batch_ingest_receipt
 ENGINE = MergeTree
 PARTITION BY toYYYYMM(checked_at)
 ORDER BY (tenant_id, dataset_id, generation_id, publish_seq, batch_id, target_table, replica_name, receipt_version);
+
+-- P2 查询跳数索引：优先覆盖统一查询固定注入的租户、发布序列和时间过滤。
+-- ADD INDEX 仅影响新数据 part；历史 part 在低峰期按租户窗口受控 MATERIALIZE，避免阻塞商业查询。
+ALTER TABLE ai_bi_dwd.sales_order_event
+    ADD INDEX IF NOT EXISTS idx_sales_publish_seq publish_seq TYPE minmax GRANULARITY 1;
+ALTER TABLE ai_bi_dwd.sales_order_event
+    ADD INDEX IF NOT EXISTS idx_sales_business_time business_time TYPE minmax GRANULARITY 4;
+ALTER TABLE ai_bi_dwd.sales_order_event
+    ADD INDEX IF NOT EXISTS idx_sales_status order_status TYPE set(32) GRANULARITY 4;
+ALTER TABLE ai_bi_dwd.sales_order_item_event
+    ADD INDEX IF NOT EXISTS idx_item_publish_seq publish_seq TYPE minmax GRANULARITY 1;
+ALTER TABLE ai_bi_dwd.sales_order_item_event
+    ADD INDEX IF NOT EXISTS idx_item_business_time business_time TYPE minmax GRANULARITY 4;
+ALTER TABLE ai_bi_dws.sales_daily_snapshot
+    ADD INDEX IF NOT EXISTS idx_snapshot_publish_seq committed_publish_seq TYPE minmax GRANULARITY 1;
+ALTER TABLE ai_bi_dws.sales_daily_snapshot
+    ADD INDEX IF NOT EXISTS idx_snapshot_business_date business_date TYPE minmax GRANULARITY 1;

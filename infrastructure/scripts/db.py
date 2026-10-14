@@ -11,6 +11,7 @@ import base64
 ROOT = Path(__file__).resolve().parents[1]
 sys.dont_write_bytecode = True
 BASELINE = 'BASELINE_001'
+MYSQL_MIGRATIONS = ROOT/'sql/mysql_migrations'
 
 
 def schema_sql(engine):
@@ -18,11 +19,52 @@ def schema_sql(engine):
 
 
 def mysql_tables():
-    return re.findall(r'^CREATE TABLE `([a-z_]+)`', schema_sql('mysql'), re.MULTILINE)
+    scripts = [schema_sql('mysql')]
+    scripts.extend(path.read_text(encoding='utf-8') for path in migration_files(MYSQL_MIGRATIONS))
+    names = re.findall(r'^CREATE TABLE `([a-z_]+)`', '\n'.join(scripts), re.MULTILINE)
+    return list(dict.fromkeys(names))
+
+
+def mysql_foreign_keys():
+    scripts = [schema_sql('mysql')]
+    scripts.extend(path.read_text(encoding='utf-8') for path in migration_files(MYSQL_MIGRATIONS))
+    names = re.findall(r'CONSTRAINT `([^`]+)` FOREIGN KEY', '\n'.join(scripts))
+    return list(dict.fromkeys(names))
 
 
 def legacy_checksums(engine):
     return dict(re.findall(r'^-- legacy (\S+) ([a-f0-9]{64})$', schema_sql(engine), re.MULTILINE))
+
+
+def migration_files(directory):
+    if not directory.exists():
+        return []
+    files = sorted(directory.glob('V[0-9][0-9][0-9]__*.sql'))
+    versions = [path.name.split('__', 1)[0] for path in files]
+    if len(versions) != len(set(versions)):
+        raise RuntimeError(f'Duplicate migration version in {directory}')
+    return files
+
+
+def apply_mysql_forward_migrations(cur):
+    """基线之后只追加版本迁移；失败记录保留并禁止自动重放。"""
+    cur.execute('SELECT version, checksum, success FROM infrastructure_schema_history')
+    history = {version:(checksum, success) for version, checksum, success in cur.fetchall()}
+    for path in migration_files(MYSQL_MIGRATIONS):
+        version = path.name.split('__', 1)[0]
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        old = history.get(version)
+        if old:
+            if old != (digest, 1):
+                raise RuntimeError(f'{path.name}: checksum mismatch or incomplete migration')
+            print(f'SKIP {path.name}')
+            continue
+        cur.execute('INSERT INTO infrastructure_schema_history(version,script,checksum) VALUES(%s,%s,%s)',
+                    (version, path.name, digest))
+        for statement in statements(path.read_text(encoding='utf-8')):
+            cur.execute(statement)
+        cur.execute('UPDATE infrastructure_schema_history SET success=1 WHERE version=%s', (version,))
+        print(f'APPLIED {path.name}')
 
 
 def validate_mysql_layout(cur):
@@ -31,7 +73,7 @@ def validate_mysql_layout(cur):
     if {r[0] for r in cur.fetchall()} != set(mysql_tables()):
         raise RuntimeError('Existing table inventory differs from the final baseline')
     cur.execute('SELECT constraint_name FROM information_schema.referential_constraints WHERE constraint_schema=DATABASE()')
-    expected = set(re.findall(r'ADD CONSTRAINT `(fk_\d+)`', schema_sql('mysql')))
+    expected = set(mysql_foreign_keys())
     if {r[0] for r in cur.fetchall()} != expected:
         raise RuntimeError('Existing foreign keys differ from the final baseline')
 
@@ -151,6 +193,7 @@ def migrate_mysql():
                     cur.execute(statement)
                 cur.execute('UPDATE infrastructure_schema_history SET success=1 WHERE version=%s', (BASELINE,))
                 print('APPLIED mysql.sql')
+            apply_mysql_forward_migrations(cur)
             print(f'MySQL {version}: migration complete')
         finally:
             cur.execute('SELECT RELEASE_LOCK(%s)', ('aibi_migrate_'+name,))

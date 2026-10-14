@@ -1,0 +1,37 @@
+{
+  "name": "ai-bi-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --configLoader native",
+    "build": "vite build --configLoader native",
+    "check": "vue-tsc --noEmit",
+    "test": "vitest run --pool=threads --maxWorkers=1 --configLoader native --exclude e2e/**",
+    "test:e2e": "playwright test",
+    "test:e2e:chromium": "playwright test --project=chromium",
+    "ci": "npm run check && npm test",
+    "release:check": "npm run ci && npm run test:e2e && npm run build",
+    "conda:dev": "conda run --no-capture-output -n AI_BI_Platform npm run dev",
+    "conda:ci": "conda run --no-capture-output -n AI_BI_Platform npm run ci",
+    "conda:build": "conda run --no-capture-output -n AI_BI_Platform npm run build"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "@vue/test-utils": "^2.5.1",
+    "jsdom": "^30.1.2",
+    "typescript": "^5.9.3",
+    "vite": "8.3.4",
+    "vitest": "5.0.3",
+    "vue-tsc": "^3.3.13"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
+    "echarts": "^5.6.0",
+    "element-plus": "^2.14.7",
+    "pinia": "^4.0.3",
+    "vue": "^3.5.43",
+    "vue-router": "^5.4.0"
+  }
+}

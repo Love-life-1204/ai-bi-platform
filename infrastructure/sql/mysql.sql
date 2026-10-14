@@ -422,6 +422,9 @@ CREATE TABLE `bi_datasource` (
   `datasource_type` VARCHAR(32) NOT NULL,
   `endpoint_json` JSON NOT NULL,
   `credential_ref` VARCHAR(255) NULL,
+  `owner_member_id` BIGINT UNSIGNED NULL,
+  `last_test_status` VARCHAR(64) NULL,
+  `last_test_at` DATETIME(3) NULL,
   `datasource_status` VARCHAR(32) NOT NULL DEFAULT 'DRAFT',
   `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
@@ -431,7 +434,8 @@ CREATE TABLE `bi_datasource` (
   `deleted_at` DATETIME(3) NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_tenant_id` (`tenant_id`, `id`),
-  UNIQUE KEY `uk_1` (`tenant_id`, `datasource_code`)
+  UNIQUE KEY `uk_1` (`tenant_id`, `datasource_code`),
+  KEY `idx_owner_member` (`tenant_id`, `owner_member_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_as_cs COMMENT='只读数据源';
 
 CREATE TABLE `bi_source_object` (
@@ -1844,6 +1848,8 @@ ALTER TABLE `bi_datasource` ADD CONSTRAINT `fk_085` FOREIGN KEY (`tenant_id`, `w
 
 ALTER TABLE `bi_datasource` ADD CONSTRAINT `fk_086` FOREIGN KEY (`created_by`) REFERENCES `sys_user` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT;
 
+ALTER TABLE `bi_datasource` ADD CONSTRAINT `fk_datasource_owner_member` FOREIGN KEY (`tenant_id`, `owner_member_id`) REFERENCES `sys_tenant_member` (`tenant_id`, `id`) ON DELETE RESTRICT ON UPDATE RESTRICT;
+
 ALTER TABLE `bi_datasource` ADD CONSTRAINT `fk_087` FOREIGN KEY (`updated_by`) REFERENCES `sys_user` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 ALTER TABLE `bi_source_object` ADD CONSTRAINT `fk_088` FOREIGN KEY (`tenant_id`) REFERENCES `sys_tenant` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT;
@@ -2270,6 +2276,7 @@ ALTER TABLE `ai_message` ADD CONSTRAINT `fk_298` FOREIGN KEY (`tenant_id`, `cont
 
 ALTER TABLE `ai_message` ADD CONSTRAINT `fk_299` FOREIGN KEY (`tenant_id`, `query_task_id`) REFERENCES `bi_query_task` (`tenant_id`, `id`) ON DELETE RESTRICT ON UPDATE RESTRICT;
 
+
 ALTER TABLE `ai_message` ADD CONSTRAINT `fk_300` FOREIGN KEY (`created_by`) REFERENCES `sys_user` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 ALTER TABLE `ai_message` ADD CONSTRAINT `fk_301` FOREIGN KEY (`updated_by`) REFERENCES `sys_user` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT;
@@ -2283,6 +2290,7 @@ ALTER TABLE `ai_task` ADD CONSTRAINT `fk_304` FOREIGN KEY (`tenant_id`, `member_
 ALTER TABLE `ai_task` ADD CONSTRAINT `fk_305` FOREIGN KEY (`created_by`) REFERENCES `sys_user` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 ALTER TABLE `ai_task` ADD CONSTRAINT `fk_306` FOREIGN KEY (`updated_by`) REFERENCES `sys_user` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT;
+
 
 ALTER TABLE `ai_tool_invocation` ADD CONSTRAINT `fk_307` FOREIGN KEY (`tenant_id`) REFERENCES `sys_tenant` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT;
 

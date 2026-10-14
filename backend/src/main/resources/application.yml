@@ -1,0 +1,117 @@
+spring:
+  application:
+    name: ai-bi-backend
+  rabbitmq:
+    host: ${RABBITMQ_HOST:127.0.0.1}
+    port: ${RABBITMQ_PORT:5671}
+    username: ${RABBITMQ_USERNAME:}
+    password: ${RABBITMQ_PASSWORD:}
+    virtual-host: ${RABBITMQ_VHOST:/aibi}
+    dynamic: ${RABBITMQ_DYNAMIC:true}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    connection-timeout: ${RABBITMQ_CONNECTION_TIMEOUT:5s}
+    requested-heartbeat: ${RABBITMQ_HEARTBEAT:30s}
+    ssl:
+      enabled: ${RABBITMQ_SSL_ENABLED:true}
+      trust-store: ${RABBITMQ_TRUST_STORE:}
+      trust-store-password: ${RABBITMQ_TRUST_STORE_PASSWORD:}
+      trust-store-type: PKCS12
+      validate-server-certificate: true
+      verify-hostname: true
+  profiles:
+    default: local
+  mvc:
+    throw-exception-if-no-handler-found: true
+  web:
+    resources:
+      add-mappings: false
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 101MB
+
+server:
+  error:
+    include-exception: false
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [%X{trace_id:-no-trace}] %logger{36} - %msg%n"
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+
+app:
+  messaging:
+    enabled: ${RABBITMQ_ENABLED:false}
+    exchange: aibi.tasks
+    dead-letter-exchange: aibi.dlx
+    publisher-batch-size: 50
+    publisher-poll-delay-ms: 500
+    publisher-lease-seconds: 30
+    publisher-confirm-timeout-seconds: 10
+    publisher-max-attempts: 5
+    consumer-prefetch: 4
+    consumer-concurrency: 1
+    consumer-max-concurrency: 4
+    consumer-retry-attempts: 3
+    consumer-retry-initial-ms: 1000
+    consumer-retry-multiplier: 2.0
+    consumer-retry-max-ms: 10000
+  datasource:
+    enabled: false
+  ingestion:
+    storage-dir: ${java.io.tmpdir}/ai-bi-imports
+    max-file-bytes: 104857600
+    preview-rows: 100
+    batch-size: 1000
+    lease-seconds: 60
+    max-attempts: 3
+    import-workers: 2
+    import-queue-capacity: 50
+  connector:
+    connect-timeout-ms: 5000
+    socket-timeout-ms: 10000
+    allow-private-network: false
+    allowed-ports: 3306,5432
+  query:
+    timeout-seconds: 30
+    global-concurrency: 20
+    tenant-concurrency: 5
+    queue-capacity: 20
+    cache-ttl-seconds: 300
+    cache-max-entries: 2000
+  analytics:
+    # P2 独立开关：试点租户验证后再开启，不影响 P0/P1 商业链路。
+    enabled: ${ANALYTICS_ENABLED:false}
+  ai:
+    service-url: ${AI_SERVICE_URL:http://127.0.0.1:8091}
+    shared-secret: ${AI_SHARED_SECRET:local-development-secret-change-me}
+    delegation-ttl-seconds: 75
+    task-timeout-seconds: 60
+    connect-timeout-ms: 2000
+    read-timeout-ms: 15000
+    workers: 4
+    queue-capacity: 50
+  commercial:
+    quota-enforcement-enabled: ${COMMERCIAL_QUOTA_ENFORCEMENT:false}
+    payment-webhook-secret: ${PAYMENT_WEBHOOK_SECRET:local-payment-secret-change-me}
+    payment-clock-skew-seconds: 300
+    export-workers: 2
+    export-queue-capacity: 20
+    export-retention-seconds: 3600
+    subscription-scan-delay-ms: 60000
+    alert-suppression-seconds: 900
+    support-grant-max-seconds: 7200
+    platform-operations-token: ${PLATFORM_OPERATIONS_TOKEN:local-platform-operations-change-me}
+    internal-service-token: ${COMMERCIAL_INTERNAL_TOKEN:local-commercial-internal-change-me}
+    email-notifications-enabled: ${COMMERCIAL_EMAIL_ENABLED:false}
+    notification-from: ${COMMERCIAL_EMAIL_FROM:}

@@ -75,7 +75,7 @@
      ▼
 WAF / Load Balancer / Ingress
      ├──── 静态站点 Vue3（CDN 或 Nginx）
-     └──── /api/v1/*  ──► Spring Boot Java API ×2+
+     └──── /api/*  ──► Spring Boot Java API ×2+
                                │        ├── MySQL 主备（事务）
                                │        ├── Redis Cache（缓存/限流）
                                │        ├── RabbitMQ（任务事件）
@@ -97,7 +97,7 @@ WAF / Load Balancer / Ingress
 
 ### 3.4 关键交互序列
 
-**用户 AI 问答：** 浏览器 POST `/api/v1/ai/conversations/{id}/messages` → Java 校验成员和配额、创建任务和业务流水 → 生成短时签名上下文 → 内部 FastAPI 开始 Graph → 语义检索（经 Java 授权快照）→ Graph 输出 DSL → Java QueryCompiler 验证权限与版本、执行 ClickHouse → 仅返回被允许的聚合/脱敏结果 → Graph 生成事实和解读 → Java 交付前再次鉴权 → SSE 返回并落审计/结算。
+**用户 AI 问答：** 浏览器 POST `/api/ai/conversations/{id}/messages` → Java 校验成员和配额、创建任务和业务流水 → 生成短时签名上下文 → 内部 FastAPI 开始 Graph → 语义检索（经 Java 授权快照）→ Graph 输出 DSL → Java QueryCompiler 验证权限与版本、执行 ClickHouse → 仅返回被允许的聚合/脱敏结果 → Graph 生成事实和解读 → Java 交付前再次鉴权 → SSE 返回并落审计/结算。
 
 **数据同步：** 定时器写 MySQL 任务/Outbox → 消息投递 → Worker 领取租约 → 只读抽取 → 写 ClickHouse 未发布批次 → 数据质量/对账 → 通过 MySQL CAS 发布指针 → 缓存按版本自然切换并发通知 → 完成审计。失败时保持旧指针可读。
 
@@ -520,19 +520,19 @@ class AiBiState(TypedDict):
 
 ### 13.1 公网到内部的调用链
 
-对外仅 Java 暴露 `/api/v1/ai/*`；Java 通过内网 mTLS 或服务间身份 + 请求 HMAC/JWS 签名调用 FastAPI `/internal/v1/ai/tasks`。短时令牌包含 `iss`、`aud`、`jti`、`exp`、`tenant_id`、`member_id`、`workspace_id`、`permission_version`、`request_id`、`trace_id` 和可用工具范围。FastAPI 校验签名、目标服务、时间窗和重放，所有工具返回给 Java 前再次授权。
+对外仅 Java 暴露 `/api/ai/*`；Java 通过内网 mTLS 或服务间身份 + 请求 HMAC/JWS 签名调用 FastAPI `/internal/v1/ai/tasks`。短时令牌包含 `iss`、`aud`、`jti`、`exp`、`tenant_id`、`member_id`、`workspace_id`、`permission_version`、`request_id`、`trace_id` 和可用工具范围。FastAPI 校验签名、目标服务、时间窗和重放，所有工具返回给 Java 前再次授权。
 
 ### 13.2 对外接口样例
 
 | Method / URI | 用途 | 典型响应 |
 |---|---|---|
-| `POST /api/v1/ai/conversations` | 创建会话 | `conversation_id` |
-| `POST /api/v1/ai/conversations/{id}/messages` | 创建 AI 请求 | HTTP 202 + `request_id, task_id` |
-| `GET /api/v1/ai/tasks/{taskId}/events` | SSE 流式订阅 | `accepted/progress/clarification/result/error/done` |
-| `GET /api/v1/ai/tasks/{taskId}` | 断线恢复查询 | 当前状态、最后 sequence |
-| `POST /api/v1/ai/tasks/{taskId}/cancel` | 取消执行 | CANCEL_REQUESTED，最终以 worker 确认 |
-| `POST /api/v1/ai/tasks/{taskId}/resume` | 回答澄清并恢复 | 新运行 attempt，保持同一个付费任务 |
-| `POST /api/v1/queries/execute` | 传统 BI 和 AI 共用查询 | QueryResult + versions |
+| `POST /api/ai/conversations` | 创建会话 | `conversation_id` |
+| `POST /api/ai/conversations/{id}/messages` | 创建 AI 请求 | HTTP 202 + `request_id, task_id` |
+| `GET /api/ai/tasks/{taskId}/events` | SSE 流式订阅 | `accepted/progress/clarification/result/error/done` |
+| `GET /api/ai/tasks/{taskId}` | 断线恢复查询 | 当前状态、最后 sequence |
+| `POST /api/ai/tasks/{taskId}/cancel` | 取消执行 | CANCEL_REQUESTED，最终以 worker 确认 |
+| `POST /api/ai/tasks/{taskId}/resume` | 回答澄清并恢复 | 新运行 attempt，保持同一个付费任务 |
+| `POST /api/queries/execute` | 传统 BI 和 AI 共用查询 | QueryResult + versions |
 
 ### 13.3 SSE 事件契约
 
@@ -619,7 +619,7 @@ class AiBiState(TypedDict):
 
 ### 17.1 REST 契约
 
-统一前缀 `/api/v1`，使用 OpenAPI 3.x 管理请求/响应 schema；列表支持限制最大 page size、稳定排序和游标或分页。创建异步任务返回 `202 Accepted` 与 `task_id`；创建订单、触发同步、AI、导出要求 `Idempotency-Key`。更新已发布或乐观锁资源时必须携带版本号，不允许静默覆盖。
+统一前缀 `/api`，使用 OpenAPI 3.x 管理请求/响应 schema；列表支持限制最大 page size、稳定排序和游标或分页。创建异步任务返回 `202 Accepted` 与 `task_id`；创建订单、触发同步、AI、导出要求 `Idempotency-Key`。更新已发布或乐观锁资源时必须携带版本号，不允许静默覆盖。
 
 ### 17.2 通用响应
 

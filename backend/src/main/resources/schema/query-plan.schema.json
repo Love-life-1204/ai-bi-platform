@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aibi.example/schema/query-plan.schema.json",
+  "title": "QueryPlan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["datasetVersionId", "metricVersionIds", "limit"],
+  "properties": {
+    "datasetVersionId": {"type": "integer", "minimum": 1},
+    "metricVersionIds": {
+      "type": "array", "minItems": 1, "maxItems": 20, "uniqueItems": true,
+      "items": {"type": "integer", "minimum": 1}
+    },
+    "dimensionFieldIds": {
+      "type": "array", "maxItems": 20, "uniqueItems": true,
+      "items": {"type": "integer", "minimum": 1}
+    },
+    "timeRange": {
+      "type": "object", "additionalProperties": false,
+      "required": ["fieldId", "start", "end"],
+      "properties": {
+        "fieldId": {"type": "integer", "minimum": 1},
+        "start": {"type": "string", "format": "date-time"},
+        "end": {"type": "string", "format": "date-time"}
+      }
+    },
+    "filters": {
+      "type": "array", "maxItems": 50,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["fieldId", "operator"],
+        "properties": {
+          "fieldId": {"type": "integer", "minimum": 1},
+          "operator": {"enum": ["EQ", "NE", "GT", "GTE", "LT", "LTE", "IN", "NOT_IN", "IS_NULL", "IS_NOT_NULL"]},
+          "value": {}
+        }
+      }
+    },
+    "sort": {
+      "type": "array", "maxItems": 10,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["targetType", "targetId", "direction"],
+        "properties": {
+          "targetType": {"enum": ["FIELD", "METRIC"]},
+          "targetId": {"type": "integer", "minimum": 1},
+          "direction": {"enum": ["ASC", "DESC"]}
+        }
+      }
+    },
+    "limit": {"type": "integer", "minimum": 1, "maximum": 10000}
+  }
+}

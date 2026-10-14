@@ -813,6 +813,7 @@ CHECK：(active_generation IS NULL AND committed_publish_seq = 0) OR (active_gen
 | workspace_id | BIGINT UNSIGNED | 否 |  | sys_workspace |
 | metric_code | VARCHAR(64) | 否 |  |  |
 | metric_name | VARCHAR(200) | 否 |  |  |
+| metric_unit | VARCHAR(32) | 否 | 'COUNT' |  |
 | metric_status | VARCHAR(32) | 否 | 'DRAFT' |  |
 | current_version_id | BIGINT UNSIGNED | 是 |  | bi_metric_version |
 | owner_member_id | BIGINT UNSIGNED | 否 |  | sys_tenant_member |
@@ -1310,6 +1311,7 @@ CHECK：
 | member_id | BIGINT UNSIGNED | 否 |  | sys_tenant_member |
 | title | VARCHAR(200) | 否 |  |  |
 | conversation_status | VARCHAR(32) | 否 | 'ACTIVE' |  |
+| context_version | INT UNSIGNED | 否 | 0 |  |
 
 唯一键：
 查询索引：tenant_id,member_id,created_at
@@ -1332,6 +1334,7 @@ CHECK：
 | content_redacted | TEXT | 是 |  |  |
 | content_object_id | BIGINT UNSIGNED | 是 |  | sys_object_file |
 | query_task_id | BIGINT UNSIGNED | 是 |  | bi_query_task |
+| ai_task_id | BIGINT UNSIGNED | 是 |  | ai_task |
 
 唯一键：tenant_id,conversation_id,message_seq
 查询索引：
@@ -1342,6 +1345,7 @@ CHECK：
 - (tenant_id,conversation_id) → ai_conversation (tenant_id,id)
 - (tenant_id,content_object_id) → sys_object_file (tenant_id,id)
 - (tenant_id,query_task_id) → bi_query_task (tenant_id,id)
+- (tenant_id,ai_task_id) → ai_task (tenant_id,id)
 - (created_by) → sys_user (id)
 - (updated_by) → sys_user (id)
 
@@ -1356,6 +1360,9 @@ CHECK：
 | checkpoint_ref | VARCHAR(512) | 是 |  |  |
 | permission_version | BIGINT UNSIGNED | 否 |  |  |
 | task_status | VARCHAR(32) | 否 | 'ACCEPTED' |  |
+| attempt | INT UNSIGNED | 否 | 1 |  |
+| context_version | INT UNSIGNED | 否 | 0 |  |
+| last_sequence | BIGINT UNSIGNED | 否 | 0 |  |
 | plan_summary | TEXT | 是 |  |  |
 | started_at | DATETIME(3) | 是 |  |  |
 | finished_at | DATETIME(3) | 是 |  |  |
@@ -1372,6 +1379,62 @@ CHECK：
 - (tenant_id,member_id) → sys_tenant_member (tenant_id,id)
 - (created_by) → sys_user (id)
 - (updated_by) → sys_user (id)
+
+## ai_conversation_context · AI会话确认上下文版本
+
+| 字段 | 类型 | 可空 | 默认值 | 引用 |
+|---|---|---|---|---|
+| tenant_id | BIGINT UNSIGNED | 否 |  | sys_tenant |
+| conversation_id | BIGINT UNSIGNED | 否 |  | ai_conversation |
+| context_version | INT UNSIGNED | 否 |  |  |
+| context_json | JSON | 否 |  |  |
+| created_at | DATETIME(3) | 否 | CURRENT_TIMESTAMP(3) |  |
+
+主键：tenant_id,conversation_id,context_version
+
+外键：
+- (tenant_id,conversation_id) → ai_conversation (tenant_id,id)
+
+## ai_task_auth_snapshot · AI任务授权快照
+
+| 字段 | 类型 | 可空 | 默认值 | 引用 |
+|---|---|---|---|---|
+| tenant_id | BIGINT UNSIGNED | 否 |  | sys_tenant |
+| ai_task_id | BIGINT UNSIGNED | 否 |  | ai_task |
+| session_id | BIGINT UNSIGNED | 否 |  |  |
+| user_id | BIGINT UNSIGNED | 否 |  |  |
+| member_id | BIGINT UNSIGNED | 否 |  |  |
+| tenant_permission_version | BIGINT UNSIGNED | 否 |  |  |
+| member_permission_version | BIGINT UNSIGNED | 否 |  |  |
+| workspace_id | BIGINT UNSIGNED | 是 |  |  |
+| permission_code | VARCHAR(128) | 否 |  |  |
+| asset_id | BIGINT UNSIGNED | 是 |  |  |
+| action_code | VARCHAR(64) | 是 |  |  |
+| created_at | DATETIME(3) | 否 | CURRENT_TIMESTAMP(3) |  |
+
+主键：tenant_id,ai_task_id
+
+外键：
+- (tenant_id,ai_task_id) → ai_task (tenant_id,id)
+
+## ai_task_event · 可恢复AI任务事件
+
+| 字段 | 类型 | 可空 | 默认值 | 引用 |
+|---|---|---|---|---|
+| tenant_id | BIGINT UNSIGNED | 否 |  | sys_tenant |
+| ai_task_id | BIGINT UNSIGNED | 否 |  | ai_task |
+| sequence | BIGINT UNSIGNED | 否 |  |  |
+| event_type | VARCHAR(32) | 否 |  |  |
+| trace_id | VARCHAR(128) | 否 |  |  |
+| payload_json | JSON | 否 |  |  |
+| emitted_at | DATETIME(3) | 否 |  |  |
+| retention_at | DATETIME(3) | 否 |  |  |
+
+主键：tenant_id,ai_task_id,sequence
+查询索引：retention_at
+
+外键：
+- (tenant_id,ai_task_id) → ai_task (tenant_id,id)
 
 ## ai_tool_invocation · AI受控工具调用
 

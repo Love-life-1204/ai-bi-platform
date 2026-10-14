@@ -1,0 +1,33 @@
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+app:
+  datasource:
+    enabled: true
+    mysql:
+      jdbc-url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:ai_bi_core}?useUnicode=true&characterEncoding=UTF-8&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&sslMode=${MYSQL_SSL_MODE:REQUIRED}
+      username: ${MYSQL_APP_USER}
+      password: ${MYSQL_APP_PASSWORD}
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      pool-name: mysql-pool
+      minimum-idle: ${MYSQL_POOL_MIN_IDLE:4}
+      maximum-pool-size: ${MYSQL_POOL_MAX_SIZE:20}
+      connection-timeout-ms: ${MYSQL_CONNECTION_TIMEOUT_MS:3000}
+      validation-timeout-ms: 1000
+      idle-timeout-ms: 600000
+      max-lifetime-ms: 1800000
+    clickhouse:
+      jdbc-url: jdbc:clickhouse:${CLICKHOUSE_HTTP_URL}
+      username: ${CLICKHOUSE_APP_USER}
+      password: ${CLICKHOUSE_APP_PASSWORD}
+      driver-class-name: com.clickhouse.jdbc.ClickHouseDriver
+      pool-name: clickhouse-read-pool
+      read-only: true
+      minimum-idle: ${CLICKHOUSE_POOL_MIN_IDLE:2}
+      maximum-pool-size: ${CLICKHOUSE_POOL_MAX_SIZE:16}
+      connection-timeout-ms: ${CLICKHOUSE_CONNECTION_TIMEOUT_MS:5000}
+      validation-timeout-ms: 2000
+      idle-timeout-ms: 300000
+      max-lifetime-ms: 900000

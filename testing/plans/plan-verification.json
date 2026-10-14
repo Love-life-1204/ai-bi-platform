@@ -1,0 +1,77 @@
+{
+  "planning_date": "2026-10-14",
+  "validation_scope": "documents_and_source_hashes_only",
+  "new_runtime_regression_executed": false,
+  "database_reaudited": false,
+  "core_task_count": 28,
+  "additional_task_count": 16,
+  "all_core_tasks_have_17_required_fields": true,
+  "dependencies_acyclic": true,
+  "all_referenced_paths_exist": true,
+  "local_link_count": 209,
+  "top_level_sections": 9,
+  "all_new_task_statuses": "待处理",
+  "core_estimated_person_days": [
+    36,
+    60
+  ],
+  "previous_fix_source_checks": [
+    {
+      "path": "frontend/src/api/client.test.ts",
+      "sha256": "f7905f8cd6ce7b4a130c79a770c0233521a9675a9067f2b2278cbb19a6247f2b",
+      "matches_previous_fix": true
+    },
+    {
+      "path": "frontend/src/api/client.ts",
+      "sha256": "d318354cf4de3dc4b0c740914420d13d24d4ae215236a9c5ea5ec6d97f862ca9",
+      "matches_previous_fix": true
+    },
+    {
+      "path": "backend/src/main/java/com/aibi/platform/config/ProductionSecretValidation.java",
+      "sha256": "7ab99b1576f9ccd496527fd084becfca718dfc335811536b07f052a2f5de9399",
+      "matches_previous_fix": true
+    },
+    {
+      "path": "backend/src/test/java/com/aibi/platform/ProductionSecretValidationTest.java",
+      "sha256": "48ef86e75e3ea5d8f1f2de5be425d433ddaa4e74a907d29638862818ec6161a2",
+      "matches_previous_fix": true
+    },
+    {
+      "path": "ai-service/app/core/config.py",
+      "sha256": "d3270c8062da1296e949ac8822467f211e4a660b4a288555b82cbb13c1fecdb2",
+      "matches_previous_fix": true
+    },
+    {
+      "path": "ai-service/app/schemas/models.py",
+      "sha256": "5085d55bcbb0de3368b5239b559efb6c94dad27ac3070866a98e95bb1d689857",
+      "matches_previous_fix": true
+    },
+    {
+      "path": "ai-service/app/security/delegation.py",
+      "sha256": "51448c157300d45a803539889f236ff568bf84cbfd7f615f00caa0cd5783f20f",
+      "matches_previous_fix": true
+    },
+    {
+      "path": "ai-service/tests/unit/test_acceptance_validation.py",
+      "sha256": "3fe50f65621232ce1a3b4f864e00498cbd480a6974828003695f0bca809e3f5d",
+      "matches_previous_fix": true
+    }
+  ],
+  "documents": [
+    {
+      "path": "修复任务清单.json",
+      "sha256": "13c47bdd5c57b13e2b72d0ba52cdfa34bfca5b20a3e4b00e6222ff6b9aa326be",
+      "bytes": 112005
+    },
+    {
+      "path": "修复进度跟踪表.md",
+      "sha256": "4a75b3db822ad007e09ac92cae20d80fb43ce7033cfff6f0cff7193ef687a763",
+      "bytes": 6822
+    },
+    {
+      "path": "缺陷修复任务清单与实施计划.md",
+      "sha256": "5a8c97b79df2dccde76373988f49fc472ea0d1eb13e78d4ba5b03cca8c9fe40f",
+      "bytes": 164000
+    }
+  ]
+}

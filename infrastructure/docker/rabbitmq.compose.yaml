@@ -1,0 +1,37 @@
+name: ai-bi-messaging
+
+services:
+  rabbitmq:
+    image: rabbitmq:4.2.9-management
+    container_name: ai-bi-rabbitmq
+    hostname: ai-bi-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_ADMIN_USER:?Set RABBITMQ_ADMIN_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_ADMIN_PASSWORD:?Set RABBITMQ_ADMIN_PASSWORD}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/aibi}
+    ports:
+      - "127.0.0.1:${RABBITMQ_TLS_PORT:-5671}:5671"
+      - "127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./rabbitmq/tls:/etc/rabbitmq/tls:ro
+    networks:
+      - messaging
+    mem_limit: 768m
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q check_running && rabbitmq-diagnostics -q check_local_alarms"]
+      interval: 10s
+      timeout: 8s
+      retries: 12
+      start_period: 40s
+
+networks:
+  messaging:
+    name: ai-bi-messaging
+    driver: bridge
+
+volumes:
+  rabbitmq-data:
+    name: ai-bi-rabbitmq-data
